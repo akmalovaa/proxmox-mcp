@@ -17,8 +17,8 @@ EXPECTED_TOOLS = {
     "list_container_snapshots", "start_container", "stop_container",
     "shutdown_container", "reboot_container", "create_container_snapshot",
     "delete_container_snapshot", "rollback_container_snapshot",
-    # storage (2)
-    "list_storage", "get_storage_content",
+    # storage (4)
+    "list_storage", "get_storage_content", "download_iso", "delete_iso",
     # cluster (4)
     "get_cluster_status", "get_cluster_resources", "get_cluster_backups",
     "get_next_vmid",
@@ -36,5 +36,5 @@ def test_all_expected_tools_registered() -> None:
     assert _registered_tool_names() == EXPECTED_TOOLS
 
 
-def test_tool_count_is_38() -> None:
-    assert len(_registered_tool_names()) == 38
+def test_tool_count_is_40() -> None:
+    assert len(_registered_tool_names()) == 40
