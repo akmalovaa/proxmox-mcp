@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Proxmox MCP — MCP server for managing Proxmox VE clusters. Provides 40 tools for nodes, VMs (QEMU), containers (LXC), storage, ISO management, cluster operations, and snapshots.
+Proxmox MCP — MCP server for managing Proxmox VE clusters. Provides 38 tools for nodes, VMs (QEMU), containers (LXC), storage, cluster operations, and snapshots.
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ src/proxmox_mcp/
     ├── nodes.py       # 7 tools: list_nodes, get_node_status, networks, disks, tasks
     ├── vms.py         # 14 tools: list/status/config/snapshots + lifecycle/clone
     ├── containers.py  # 11 tools: list/status/config/snapshots + lifecycle
-    ├── storage.py     # 4 tools: list_storage, get_storage_content, download_iso, delete_iso
+    ├── storage.py     # 2 tools: list_storage, get_storage_content
     └── cluster.py     # 4 tools: status, resources, backups, next_vmid
 ```
 

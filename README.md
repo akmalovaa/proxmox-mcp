@@ -2,7 +2,7 @@
 
 MCP server for managing Proxmox VE through Claude Code, Claude Desktop, and any MCP-compatible client.
 
-40 tools: nodes, QEMU VMs, LXC containers, storage, ISO management, cluster, tasks, snapshots.
+38 tools: nodes, QEMU VMs, LXC containers, storage, cluster, tasks, snapshots.
 
 ## Requirements
 
@@ -77,8 +77,8 @@ PROXMOX_RISK_LEVEL=read
 | Level | Allows |
 |-------|--------|
 | `read` (default) | Read-only tools only |
-| `lifecycle` | + start/stop/reboot/suspend/resume, clone, create snapshot, download ISO |
-| `all` | + delete snapshot, rollback snapshot, delete ISO |
+| `lifecycle` | + start/stop/reboot/suspend/resume, clone, create snapshot |
+| `all` | + delete snapshot, rollback snapshot |
 
 Every elevated call is logged to stderr (`ALLOW`/`DENY` + tool name + tier).
 
@@ -262,14 +262,12 @@ With Docker (password auth):
 | `delete_container_snapshot` | all | Delete a snapshot |
 | `rollback_container_snapshot` | all | Rollback to a snapshot |
 
-### Storage (4)
+### Storage (2)
 
-| Tool | Tier | Description |
-|------|------|-------------|
-| `list_storage` | read | Storage pools with usage, optionally filter by node |
-| `get_storage_content` | read | Contents of a storage pool (ISOs, backups, images, templates) |
-| `download_iso` | lifecycle | Download an ISO into a storage pool from a URL |
-| `delete_iso` | all | Delete an ISO from a storage pool |
+| Tool | Description |
+|------|-------------|
+| `list_storage` | Storage pools with usage, optionally filter by node |
+| `get_storage_content` | Contents of a storage pool (ISOs, backups, images, templates) |
 
 ### Cluster (4)
 
