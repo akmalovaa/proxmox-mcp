@@ -1,0 +1,22 @@
+[project]
+name = "proxmox-mcp"
+version = "0.1.0"
+description = "MCP server for Proxmox VE management"
+readme = "README.md"
+authors = [
+    { name = "Artur Akmalov", email = "artur@akmalov.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "mcp[cli]>=1.9",
+    "proxmoxer>=2.1",
+    "requests>=2.32",
+    "pydantic-settings>=2.9",
+]
+
+[project.scripts]
+proxmox-mcp = "proxmox_mcp.server:main"
+
+[build-system]
+requires = ["uv_build>=0.11.3,<0.12.0"]
+build-backend = "uv_build"

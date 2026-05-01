@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv
+
+# Environment
+.env
+
+# Claude Code (per-user)
+.claude/settings.local.json
