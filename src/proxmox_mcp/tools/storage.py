@@ -1,7 +1,7 @@
 import json
 from typing import Literal
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context, FastMCP
 
 from proxmox_mcp.tools._common import _ctx
 
@@ -18,10 +18,7 @@ def register(mcp: FastMCP) -> None:
             node: Filter by node name. If omitted, lists all cluster storage.
         """
         pve = _ctx(ctx).proxmox
-        if node:
-            storage = pve.nodes(node).storage.get()
-        else:
-            storage = pve.storage.get()
+        storage = pve.nodes(node).storage.get() if node else pve.storage.get()
         return json.dumps(storage, indent=2)
 
     @mcp.tool()

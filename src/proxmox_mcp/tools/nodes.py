@@ -1,6 +1,6 @@
 import json
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context, FastMCP
 
 from proxmox_mcp.tools._common import _ctx
 
@@ -25,7 +25,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def get_node_status(ctx: Context, node: str) -> str:
-        """Get detailed status of a specific node including CPU, memory, disk, load average, and kernel version.
+        """Get detailed status of a node: CPU, memory, disk, load average, kernel version.
 
         Args:
             node: Node name (e.g. 'pve', 'node1')

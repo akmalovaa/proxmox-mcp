@@ -1,7 +1,7 @@
 import json
 from typing import Literal
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context, FastMCP
 
 from proxmox_mcp.tools._common import _ctx
 

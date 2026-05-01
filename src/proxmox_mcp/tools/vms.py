@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context, FastMCP
 from proxmoxer import ResourceException
 
 from proxmox_mcp.tools._common import _ctx, _elevated, _status_response
@@ -218,7 +218,10 @@ def register(mcp: FastMCP) -> None:
     async def exec_vm_command(
         ctx: Context, node: str, vmid: int, command: str, timeout_s: int = 10
     ) -> str:
-        """Execute a command inside a VM via QEMU Guest Agent. The VM must have qemu-guest-agent running. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Execute a command inside a VM via QEMU Guest Agent.
+
+        The VM must have qemu-guest-agent running.
+        Requires PROXMOX_ALLOW_ELEVATED=true.
 
         Args:
             node: Node name

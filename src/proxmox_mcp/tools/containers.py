@@ -1,6 +1,6 @@
 import json
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context, FastMCP
 
 from proxmox_mcp.tools._common import _ctx, _elevated, _status_response
 
