@@ -34,9 +34,9 @@ src/proxmox_mcp/
 ## Key Patterns
 
 - **Lifespan pattern**: Proxmoxer connection is created once in `client.py:lifespan()`, shared via `AppContext`
-- **Two-tier access**: read-only tools always available; elevated tools (start/stop/snapshot/exec) require `PROXMOX_ALLOW_ELEVATED=true`
+- **Three-tier access**: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`. `read` exposes only GETs; `lifecycle` adds start/stop/clone/create-snapshot; `all` adds delete/rollback/exec.
 - **Tool registration**: each `tools/*.py` has a `register(mcp)` function that decorates functions with `@mcp.tool()`
-- **Context access**: `_ctx(ctx)` helper extracts `AppContext` from MCP context; `_elevated(ctx)` guards destructive ops
+- **Context access**: `_ctx(ctx)` helper extracts `AppContext` from MCP context; `_tier(ctx, "lifecycle"|"all")` guards elevated ops and logs ALLOW/DENY to stderr
 - **Return format**: all tools return `json.dumps(data, indent=2)` — no formatting, no emoji, raw JSON for LLM
 
 ## Commands
@@ -64,7 +64,7 @@ All via environment variables (prefix `PROXMOX_`):
 | `PROXMOX_TOKEN_NAME` | yes* | — | API token name |
 | `PROXMOX_TOKEN_VALUE` | yes* | — | API token value |
 | `PROXMOX_PASSWORD` | yes* | — | Password (fallback if no token) |
-| `PROXMOX_ALLOW_ELEVATED` | no | false | Enable destructive operations |
+| `PROXMOX_RISK_LEVEL` | no | read | `read`/`lifecycle`/`all` — see "Three-tier access" |
 
 *Either token (name+value) or password is required.
 
@@ -73,5 +73,5 @@ All via environment variables (prefix `PROXMOX_`):
 1. Create or edit a file in `src/proxmox_mcp/tools/`
 2. Add a `register(mcp: FastMCP)` function with `@mcp.tool()` decorated handlers
 3. Each tool gets `ctx: Context` as first param; use `_ctx(ctx).proxmox` for the API client
-4. For destructive operations, call `_elevated(ctx)` at the start
+4. For elevated operations, call `_tier(ctx, "lifecycle")` or `_tier(ctx, "all")` at the start
 5. Register the module in `tools/__init__.py`

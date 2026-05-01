@@ -1,6 +1,8 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic_settings import BaseSettings
+
+RiskLevel = Literal["read", "lifecycle", "all"]
 
 
 class Settings(BaseSettings):
@@ -18,8 +20,11 @@ class Settings(BaseSettings):
     # Password auth (fallback)
     password: str | None = None
 
-    # Elevated operations
-    allow_elevated: bool = False
+    # Risk tier for elevated operations:
+    #   read      — only read-only tools
+    #   lifecycle — + start/stop/reboot/snapshot-create/clone
+    #   all       — + delete/rollback/exec
+    risk_level: RiskLevel = "read"
 
     def get_proxmoxer_kwargs(self) -> dict[str, Any]:
         kwargs: dict[str, Any] = {

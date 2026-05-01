@@ -69,10 +69,18 @@ PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # Optional
 PROXMOX_PORT=8006
 PROXMOX_VERIFY_SSL=false
-PROXMOX_ALLOW_ELEVATED=false
+PROXMOX_RISK_LEVEL=read
 ```
 
-Set `PROXMOX_ALLOW_ELEVATED=true` to enable start/stop/reboot/snapshot/clone/exec operations.
+`PROXMOX_RISK_LEVEL` controls which tools are exposed:
+
+| Level | Allows |
+|-------|--------|
+| `read` (default) | Read-only tools only |
+| `lifecycle` | + start/stop/reboot/suspend/resume, clone, create snapshot |
+| `all` | + delete snapshot, rollback snapshot, exec via guest agent |
+
+Every elevated call is logged to stderr (`ALLOW`/`DENY` + tool name + tier).
 
 Password auth is also supported — set `PROXMOX_PASSWORD` instead of token variables.
 
@@ -221,39 +229,39 @@ With Docker (password auth):
 
 ### QEMU VMs (15)
 
-| Tool | Elevated | Description |
-|------|----------|-------------|
-| `list_vms` | | List all VMs, optionally filter by node |
-| `get_vm_status` | | Current VM status (running/stopped, CPU, memory) |
-| `get_vm_config` | | VM configuration (hardware, disks, network) |
-| `list_vm_snapshots` | | List all snapshots of a VM |
-| `start_vm` | yes | Start a VM |
-| `stop_vm` | yes | Force-stop a VM |
-| `shutdown_vm` | yes | Graceful ACPI shutdown with timeout |
-| `reboot_vm` | yes | Reboot via ACPI |
-| `suspend_vm` | yes | Suspend a VM |
-| `resume_vm` | yes | Resume a suspended VM |
-| `clone_vm` | yes | Full or linked clone |
-| `create_vm_snapshot` | yes | Create a snapshot |
-| `delete_vm_snapshot` | yes | Delete a snapshot |
-| `rollback_vm_snapshot` | yes | Rollback to a snapshot |
-| `exec_vm_command` | yes | Execute command via QEMU Guest Agent |
+| Tool | Tier | Description |
+|------|------|-------------|
+| `list_vms` | read | List all VMs, optionally filter by node |
+| `get_vm_status` | read | Current VM status (running/stopped, CPU, memory) |
+| `get_vm_config` | read | VM configuration (hardware, disks, network) |
+| `list_vm_snapshots` | read | List all snapshots of a VM |
+| `start_vm` | lifecycle | Start a VM |
+| `stop_vm` | lifecycle | Force-stop a VM |
+| `shutdown_vm` | lifecycle | Graceful ACPI shutdown with timeout |
+| `reboot_vm` | lifecycle | Reboot via ACPI |
+| `suspend_vm` | lifecycle | Suspend a VM |
+| `resume_vm` | lifecycle | Resume a suspended VM |
+| `clone_vm` | lifecycle | Full or linked clone |
+| `create_vm_snapshot` | lifecycle | Create a snapshot |
+| `delete_vm_snapshot` | all | Delete a snapshot |
+| `rollback_vm_snapshot` | all | Rollback to a snapshot |
+| `exec_vm_command` | all | Execute command via QEMU Guest Agent |
 
 ### LXC Containers (11)
 
-| Tool | Elevated | Description |
-|------|----------|-------------|
-| `list_containers` | | List all LXC containers, optionally filter by node |
-| `get_container_status` | | Current container status |
-| `get_container_config` | | Container configuration |
-| `list_container_snapshots` | | List all snapshots |
-| `start_container` | yes | Start a container |
-| `stop_container` | yes | Force-stop a container |
-| `shutdown_container` | yes | Graceful shutdown with timeout |
-| `reboot_container` | yes | Reboot a container |
-| `create_container_snapshot` | yes | Create a snapshot |
-| `delete_container_snapshot` | yes | Delete a snapshot |
-| `rollback_container_snapshot` | yes | Rollback to a snapshot |
+| Tool | Tier | Description |
+|------|------|-------------|
+| `list_containers` | read | List all LXC containers, optionally filter by node |
+| `get_container_status` | read | Current container status |
+| `get_container_config` | read | Container configuration |
+| `list_container_snapshots` | read | List all snapshots |
+| `start_container` | lifecycle | Start a container |
+| `stop_container` | lifecycle | Force-stop a container |
+| `shutdown_container` | lifecycle | Graceful shutdown with timeout |
+| `reboot_container` | lifecycle | Reboot a container |
+| `create_container_snapshot` | lifecycle | Create a snapshot |
+| `delete_container_snapshot` | all | Delete a snapshot |
+| `rollback_container_snapshot` | all | Rollback to a snapshot |
 
 ### Storage (2)
 
@@ -290,14 +298,10 @@ src/proxmox_mcp/
 
 **Key design decisions:**
 
-- **Read-only by default** — destructive tools are gated behind `PROXMOX_ALLOW_ELEVATED=true`
+- **Read-only by default** — elevated tools are gated behind `PROXMOX_RISK_LEVEL` (3 tiers: `read` / `lifecycle` / `all`)
 - **API token auth** — recommended; password auth as fallback
 - **Lifespan pattern** — single Proxmoxer connection created at startup, shared across all tools
 - **Clean JSON output** — no formatting or decorations; LLM processes raw data
-
-## TODO
-
-- [ ] **LXC `exec_container_command` via SSH + `pct exec`** — Proxmox REST API has no LXC exec endpoint, so the tool was removed. Bring it back by SSHing to the target node under a restricted user (sudoers limited to `pct exec`) and running `pct exec <vmid> -- <cmd>`. Requires: `asyncssh` dep, new `Settings` fields (`ssh_user`, `ssh_key_path` or `ssh_password`, optional per-node overrides), gating under `PROXMOX_ALLOW_ELEVATED`. Use cases: patching, log inspection, app deploy/restart, agent-driven diagnostics across the LXC fleet.
 
 ## License
 

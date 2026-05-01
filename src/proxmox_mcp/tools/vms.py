@@ -5,7 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from proxmoxer import ResourceException
 
-from proxmox_mcp.tools._common import _ctx, _elevated, _status_response
+from proxmox_mcp.tools._common import _ctx, _status_response, _tier
 
 
 def register(mcp: FastMCP) -> None:
@@ -64,83 +64,83 @@ def register(mcp: FastMCP) -> None:
         snapshots = pve.nodes(node).qemu(vmid).snapshot.get()
         return json.dumps(snapshots, indent=2)
 
-    # ── Elevated ──
+    # ── Lifecycle (PROXMOX_RISK_LEVEL=lifecycle) ──
 
     @mcp.tool()
     def start_vm(ctx: Context, node: str, vmid: int) -> str:
-        """Start a VM. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Start a VM. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
             vmid: VM ID number
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.start.post()
         return _status_response("starting", upid)
 
     @mcp.tool()
     def stop_vm(ctx: Context, node: str, vmid: int) -> str:
-        """Force-stop a VM (like pulling the power). Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Force-stop a VM (like pulling the power). Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
             vmid: VM ID number
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.stop.post()
         return _status_response("stopping", upid)
 
     @mcp.tool()
     def shutdown_vm(ctx: Context, node: str, vmid: int, timeout: int = 60) -> str:
-        """Gracefully shutdown a VM via ACPI. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Gracefully shutdown a VM via ACPI. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
             vmid: VM ID number
             timeout: Seconds to wait before force-stop (default 60)
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.shutdown.post(timeout=timeout)
         return _status_response("shutting_down", upid)
 
     @mcp.tool()
     def reboot_vm(ctx: Context, node: str, vmid: int) -> str:
-        """Reboot a VM via ACPI. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Reboot a VM via ACPI. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
             vmid: VM ID number
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.reboot.post()
         return _status_response("rebooting", upid)
 
     @mcp.tool()
     def suspend_vm(ctx: Context, node: str, vmid: int) -> str:
-        """Suspend a VM. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Suspend a VM. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
             vmid: VM ID number
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.suspend.post()
         return _status_response("suspending", upid)
 
     @mcp.tool()
     def resume_vm(ctx: Context, node: str, vmid: int) -> str:
-        """Resume a suspended VM. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Resume a suspended VM. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
             vmid: VM ID number
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.resume.post()
         return _status_response("resuming", upid)
@@ -149,7 +149,7 @@ def register(mcp: FastMCP) -> None:
     def clone_vm(
         ctx: Context, node: str, vmid: int, newid: int, name: str | None = None, full: bool = True
     ) -> str:
-        """Clone a VM. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Clone a VM. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
@@ -158,7 +158,7 @@ def register(mcp: FastMCP) -> None:
             name: Name for the cloned VM
             full: Full clone (true) or linked clone (false)
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         # Proxmox API expects 0/1 for boolean params, not true/false.
         params: dict[str, Any] = {"newid": newid, "full": int(full)}
@@ -171,7 +171,7 @@ def register(mcp: FastMCP) -> None:
     def create_vm_snapshot(
         ctx: Context, node: str, vmid: int, snapname: str, description: str = ""
     ) -> str:
-        """Create a snapshot of a VM. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Create a snapshot of a VM. Requires PROXMOX_RISK_LEVEL=lifecycle.
 
         Args:
             node: Node name
@@ -179,37 +179,39 @@ def register(mcp: FastMCP) -> None:
             snapname: Snapshot name
             description: Optional description
         """
-        _elevated(ctx)
+        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot.post(
             snapname=snapname, description=description
         )
         return _status_response("creating_snapshot", upid)
 
+    # ── Destructive (PROXMOX_RISK_LEVEL=all) ──
+
     @mcp.tool()
     def delete_vm_snapshot(ctx: Context, node: str, vmid: int, snapname: str) -> str:
-        """Delete a VM snapshot. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Delete a VM snapshot. Requires PROXMOX_RISK_LEVEL=all.
 
         Args:
             node: Node name
             vmid: VM ID
             snapname: Snapshot name to delete
         """
-        _elevated(ctx)
+        _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot(snapname).delete()
         return _status_response("deleting_snapshot", upid)
 
     @mcp.tool()
     def rollback_vm_snapshot(ctx: Context, node: str, vmid: int, snapname: str) -> str:
-        """Rollback a VM to a snapshot. Requires PROXMOX_ALLOW_ELEVATED=true.
+        """Rollback a VM to a snapshot. Requires PROXMOX_RISK_LEVEL=all.
 
         Args:
             node: Node name
             vmid: VM ID
             snapname: Snapshot name to rollback to
         """
-        _elevated(ctx)
+        _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot(snapname).rollback.post()
         return _status_response("rolling_back", upid)
@@ -221,7 +223,7 @@ def register(mcp: FastMCP) -> None:
         """Execute a command inside a VM via QEMU Guest Agent.
 
         The VM must have qemu-guest-agent running.
-        Requires PROXMOX_ALLOW_ELEVATED=true.
+        Requires PROXMOX_RISK_LEVEL=all.
 
         Args:
             node: Node name
@@ -229,7 +231,7 @@ def register(mcp: FastMCP) -> None:
             command: Shell command to execute
             timeout_s: How long to wait for completion before returning still_running (default 10)
         """
-        _elevated(ctx)
+        _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
         result = await asyncio.to_thread(
             pve.nodes(node).qemu(vmid).agent.exec.post, command=["sh", "-c", command]
