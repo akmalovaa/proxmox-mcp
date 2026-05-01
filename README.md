@@ -18,7 +18,40 @@ MCP server for managing Proxmox VE
 
 Image: `ghcr.io/akmalovaa/proxmox-mcp:latest` (multi-arch: `amd64` + `arm64`).
 
-Add to `~/.claude/settings.json` (Claude Code) or `claude_desktop_config.json` (Claude Desktop):
+**1. Export credentials in your shell profile** (`~/.zprofile`, `~/.zshrc` or `~/.bashrc`):
+
+```bash
+# base environment:
+export PROXMOX_HOST=192.168.1.100
+export PROXMOX_USER=root@pam
+export PROXMOX_PASSWORD=your-password
+# or use token auth (recommended):
+export PROXMOX_TOKEN_NAME=mcp
+export PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+# optional:
+export PROXMOX_RISK_LEVEL=read
+```
+
+Reload: `source ~/.zprofile` (or restart the shell).
+
+**2. Add to `~/.claude/settings.json` (Claude Code) or `claude_desktop_config.json` (Claude Desktop)**:
+
+```json
+{
+  "mcpServers": {
+    "proxmox": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+        "-e", "PROXMOX_HOST",
+        "-e", "PROXMOX_USER",
+        "-e", "PROXMOX_PASSWORD",
+        "ghcr.io/akmalovaa/proxmox-mcp:latest"]
+    }
+  }
+}
+```
+
+or token auth:
 
 ```json
 {
@@ -30,21 +63,17 @@ Add to `~/.claude/settings.json` (Claude Code) or `claude_desktop_config.json` (
         "-e", "PROXMOX_USER",
         "-e", "PROXMOX_TOKEN_NAME",
         "-e", "PROXMOX_TOKEN_VALUE",
-        "ghcr.io/akmalovaa/proxmox-mcp:latest"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_TOKEN_NAME": "mcp",
-        "PROXMOX_TOKEN_VALUE": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-      }
+        "ghcr.io/akmalovaa/proxmox-mcp:latest"]
     }
   }
 }
 ```
 
-Restart the client — 38 Proxmox tools become available.
+`docker run -e VAR` without a value passes the host variable through — no secrets in the config file. Restart the client — 38 Proxmox tools become available.
 
-For password auth, swap the token vars for `PROXMOX_PASSWORD`. If your client inherits the shell environment (e.g. launched from a terminal that sourced `~/.zprofile`), the `env` block can be dropped — Docker picks values up via `-e VAR_NAME` (no value = pass-through from host).
+For password auth, swap the token vars for `PROXMOX_PASSWORD`.
+
+> **Note:** Claude Desktop on macOS is launched via launchd and does **not** inherit `~/.zprofile`/`~/.zshrc`. Either put the exports in `~/.zshenv`, or fall back to an inline `"env": { ... }` block in the config.
 
 ## Configuration
 
