@@ -1,0 +1,8 @@
+services:
+  proxmox-mcp:
+    build: .
+    image: proxmox-mcp
+    container_name: proxmox-mcp
+    env_file: .env
+    stdin_open: true
+    restart: "no"

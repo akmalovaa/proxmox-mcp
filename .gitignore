@@ -9,6 +9,7 @@ wheels/
 # Tooling caches
 .mypy_cache/
 .ruff_cache/
+.pytest_cache/
 
 # Virtual environments
 .venv
@@ -17,4 +18,7 @@ wheels/
 .env
 
 # Claude Code (per-user)
-.claude/settings.local.json
+.claude/
+
+# temp files
+temp/

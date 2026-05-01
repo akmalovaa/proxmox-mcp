@@ -1,217 +1,92 @@
 # proxmox-mcp
 
-MCP server for managing Proxmox VE through Claude Code, Claude Desktop, and any MCP-compatible client.
+Simples Proxmox MCP
 
-38 tools: nodes, QEMU VMs, LXC containers, storage, cluster, tasks, snapshots.
+MCP server for managing Proxmox VE
 
-## Requirements
+**38 tools** — nodes, QEMU VMs, LXC containers, storage, cluster, snapshots.
 
-- Python 3.14+ with [UV](https://docs.astral.sh/uv/), or Docker
-- Proxmox VE 7+ with API access
+### Why this one?
 
-## Installation
+- **One image**, multi-arch — `docker run ghcr.io/akmalovaa/proxmox-mcp:latest` and you're done
+- **Just env vars** — no config files, no database, no state
+- **Read-only by default** — destructive ops are gated behind an explicit `PROXMOX_RISK_LEVEL`
+- **Tiny codebase** — pure stdio MCP over Proxmoxer, no HTTP server, no auth layer, no extras
+- **Raw JSON out** — no formatting, no emoji; LLM gets clean data
 
-```bash
-git clone https://github.com/akmalov/proxmox-mcp.git
-cd proxmox-mcp
-uv sync
+## Quick start
+
+Image: `ghcr.io/akmalovaa/proxmox-mcp:latest` (multi-arch: `amd64` + `arm64`).
+
+Add to `~/.claude/settings.json` (Claude Code) or `claude_desktop_config.json` (Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "proxmox": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+        "-e", "PROXMOX_HOST",
+        "-e", "PROXMOX_USER",
+        "-e", "PROXMOX_TOKEN_NAME",
+        "-e", "PROXMOX_TOKEN_VALUE",
+        "ghcr.io/akmalovaa/proxmox-mcp:latest"],
+      "env": {
+        "PROXMOX_HOST": "192.168.1.100",
+        "PROXMOX_USER": "root@pam",
+        "PROXMOX_TOKEN_NAME": "mcp",
+        "PROXMOX_TOKEN_VALUE": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+      }
+    }
+  }
+}
 ```
 
-### Docker
+Restart the client — 38 Proxmox tools become available.
 
-```bash
-docker build -t proxmox-mcp .
-docker run -i --rm --env-file .env proxmox-mcp
-```
-
-Or pass variables directly:
-
-```bash
-# Token auth
-docker run -i --rm \
-  -e PROXMOX_HOST=192.168.1.100 \
-  -e PROXMOX_USER=root@pam \
-  -e PROXMOX_TOKEN_NAME=mcp \
-  -e PROXMOX_TOKEN_VALUE=your-token-value \
-  proxmox-mcp
-
-# Password auth
-docker run -i --rm \
-  -e PROXMOX_HOST=192.168.1.100 \
-  -e PROXMOX_USER=root@pam \
-  -e PROXMOX_PASSWORD=your-password \
-  proxmox-mcp
-```
-
-## Proxmox API Token
-
-Create an API token in Proxmox UI:
-
-```
-Datacenter → Permissions → API Tokens → Add
-  User:                  root@pam
-  Token ID:              mcp
-  Privilege Separation:  unchecked
-```
-
-Save the token value — it is shown only once.
+For password auth, swap the token vars for `PROXMOX_PASSWORD`. If your client inherits the shell environment (e.g. launched from a terminal that sourced `~/.zprofile`), the `env` block can be dropped — Docker picks values up via `-e VAR_NAME` (no value = pass-through from host).
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in your values:
+All settings are environment variables — set them in your shell profile, pass them inline to `docker run -e`, or declare them in your MCP client's `env` block.
 
-```env
-PROXMOX_HOST=192.168.1.100
-PROXMOX_USER=root@pam
-PROXMOX_TOKEN_NAME=mcp
-PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXMOX_HOST` | — | Proxmox host (IP or hostname) |
+| `PROXMOX_USER` | `root@pam` | API user |
+| **Auth** | — | **token *or* password — see below** |
+| `PROXMOX_PORT` | `8006` | API port |
+| `PROXMOX_VERIFY_SSL` | `false` | Verify TLS certificate |
+| `PROXMOX_RISK_LEVEL` | `read` | `read` / `lifecycle` / `all` |
 
-# Optional
-PROXMOX_PORT=8006
-PROXMOX_VERIFY_SSL=false
-PROXMOX_RISK_LEVEL=read
+### Authentication: token *or* password
+
+Pick **one**. If both are set, the token wins.
+
+**Token (recommended)** — create in Proxmox UI: *Datacenter → Permissions → API Tokens → Add* (uncheck *Privilege Separation*). Then:
+
+```bash
+export PROXMOX_TOKEN_NAME=mcp
+export PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
-`PROXMOX_RISK_LEVEL` controls which tools are exposed:
+**Password (fallback)**:
 
-| Level | Allows |
-|-------|--------|
-| `read` (default) | Read-only tools only |
-| `lifecycle` | + start/stop/reboot/suspend/resume, clone, create snapshot |
-| `all` | + delete snapshot, rollback snapshot |
-
-Every elevated call is logged to stderr (`ALLOW`/`DENY` + tool name + tier).
-
-Password auth is also supported — set `PROXMOX_PASSWORD` instead of token variables.
-
-## Usage with Claude Code
-
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/proxmox-mcp", "proxmox-mcp"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_TOKEN_NAME": "mcp",
-        "PROXMOX_TOKEN_VALUE": "your-token-value"
-      }
-    }
-  }
-}
+```bash
+export PROXMOX_PASSWORD=your-password
 ```
 
-With Docker:
+### Risk levels
 
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "type": "stdio",
-      "command": "docker",
-      "args": ["run", "-i", "--rm",
-        "-e", "PROXMOX_HOST", "-e", "PROXMOX_USER",
-        "-e", "PROXMOX_TOKEN_NAME", "-e", "PROXMOX_TOKEN_VALUE",
-        "proxmox-mcp"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_TOKEN_NAME": "mcp",
-        "PROXMOX_TOKEN_VALUE": "your-token-value"
-      }
-    }
-  }
-}
-```
+`PROXMOX_RISK_LEVEL` gates destructive operations:
 
-With Docker (password auth):
+| Level | Adds |
+|-------|------|
+| `read` *(default)* | read-only tools |
+| `lifecycle` | + start / stop / reboot / suspend / clone / create-snapshot |
+| `all` | + delete-snapshot / rollback-snapshot |
 
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "type": "stdio",
-      "command": "docker",
-      "args": ["run", "-i", "--rm",
-        "-e", "PROXMOX_HOST", "-e", "PROXMOX_USER", "-e", "PROXMOX_PASSWORD",
-        "proxmox-mcp"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_PASSWORD": "your-password"
-      }
-    }
-  }
-}
-```
-
-## Usage with Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/proxmox-mcp", "proxmox-mcp"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_TOKEN_NAME": "mcp",
-        "PROXMOX_TOKEN_VALUE": "your-token-value"
-      }
-    }
-  }
-}
-```
-
-With Docker:
-
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm",
-        "-e", "PROXMOX_HOST", "-e", "PROXMOX_USER",
-        "-e", "PROXMOX_TOKEN_NAME", "-e", "PROXMOX_TOKEN_VALUE",
-        "proxmox-mcp"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_TOKEN_NAME": "mcp",
-        "PROXMOX_TOKEN_VALUE": "your-token-value"
-      }
-    }
-  }
-}
-```
-
-With Docker (password auth):
-
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm",
-        "-e", "PROXMOX_HOST", "-e", "PROXMOX_USER", "-e", "PROXMOX_PASSWORD",
-        "proxmox-mcp"],
-      "env": {
-        "PROXMOX_HOST": "192.168.1.100",
-        "PROXMOX_USER": "root@pam",
-        "PROXMOX_PASSWORD": "your-password"
-      }
-    }
-  }
-}
-```
+Every elevated call is logged to stderr (`ALLOW` / `DENY` + tool + tier).
 
 ## Tools
 
@@ -281,26 +156,64 @@ With Docker (password auth):
 ## Architecture
 
 ```
-├── Dockerfile         # Docker image (python:3.14-slim + UV)
-├── .dockerignore
 src/proxmox_mcp/
-├── server.py          # FastMCP instance + entry point
-├── config.py          # Pydantic Settings (env vars with PROXMOX_ prefix)
-├── client.py          # Proxmoxer connection via lifespan pattern
-└── tools/
-    ├── nodes.py       # Node info, tasks, disks, networks
-    ├── vms.py         # QEMU VM read + lifecycle + snapshots + exec
-    ├── containers.py  # LXC read + lifecycle + snapshots
-    ├── storage.py     # Storage pools and content
-    └── cluster.py     # Cluster status, resources, backups
+├── server.py    # FastMCP instance + entry point
+├── config.py    # Pydantic Settings (PROXMOX_ prefix)
+├── client.py    # Proxmoxer connection via lifespan
+└── tools/       # nodes, vms, containers, storage, cluster
 ```
 
-**Key design decisions:**
+- **Read-only by default** — elevated tools gated by `PROXMOX_RISK_LEVEL`
+- **Single connection** — Proxmoxer client created once at startup, shared via lifespan
+- **Raw JSON output** — no formatting; LLM consumes data directly
 
-- **Read-only by default** — elevated tools are gated behind `PROXMOX_RISK_LEVEL` (3 tiers: `read` / `lifecycle` / `all`)
-- **API token auth** — recommended; password auth as fallback
-- **Lifespan pattern** — single Proxmoxer connection created at startup, shared across all tools
-- **Clean JSON output** — no formatting or decorations; LLM processes raw data
+## Development
+
+### Run standalone (testing)
+
+```bash
+export PROXMOX_HOST=192.168.1.100
+export PROXMOX_USER=root@pam
+export PROXMOX_TOKEN_NAME=mcp
+export PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+docker run -i --rm \
+  -e PROXMOX_HOST -e PROXMOX_USER \
+  -e PROXMOX_TOKEN_NAME -e PROXMOX_TOKEN_VALUE \
+  ghcr.io/akmalovaa/proxmox-mcp:latest
+```
+
+### Without Docker (UV)
+
+```bash
+git clone https://github.com/akmalovaa/proxmox-mcp.git && cd proxmox-mcp && uv sync
+```
+
+MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "proxmox": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/proxmox-mcp", "proxmox-mcp"],
+      "env": {
+        "PROXMOX_HOST": "192.168.1.100",
+        "PROXMOX_TOKEN_NAME": "mcp",
+        "PROXMOX_TOKEN_VALUE": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/akmalovaa/proxmox-mcp.git
+cd proxmox-mcp
+docker build -t proxmox-mcp .
+```
 
 ## License
 
