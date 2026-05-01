@@ -1,95 +1,58 @@
-# TODO — продолжить завтра
+# task.md
 
-## Контекст
+## Принцип проекта
 
-Сравнили `proxmox-mcp` с https://github.com/RekklesNA/ProxmoxMCP-Plus.
-Plus — большой production-grade проект (158⭐, OpenAPI-мост, job store на SQLite,
-policy-движок, SSH в LXC, backup/ISO/restore, тесты+CI, PyPI/GHCR/Smithery).
-Наш — ~500 LOC, простой и аудируемый, stdio-only, один булев гейт
-`PROXMOX_ALLOW_ELEVATED`.
+`proxmox-mcp` — намеренно **простой** MCP для Proxmox VE. Личное использование,
+Claude Desktop / Claude Code, stdio-only. Не пытаемся догнать ProxmoxMCP-Plus
+по фичам — нам не нужен job store на SQLite, OpenAPI-мост, paramiko, smithery.
 
-Решение по выбору:
-- личное использование, Claude Desktop → наш
-- команда / прод / эскалация прав → Plus или дотянуть наш до уровня ниже
+Правило: **bias к удалению**. Каждая новая тулза должна закрывать конкретный
+повторяющийся pain, а не «может пригодиться».
 
 ---
 
-## Что сделать дальше
+## Текущее состояние
 
-### 1. Persistent job store (high value, средней сложности)
-
-Сейчас destructive-тулзы возвращают сырой Proxmox UPID. LLM не может ничего
-с ним сделать кроме `get_task_status`, и при рестарте сервера контекст теряется.
-
-- ввести `job_id` (uuid) поверх UPID
-- хранилище: для начала in-memory dict с TTL (30 мин), потом — SQLite (как у Plus)
-- хранить: `job_id`, `upid`, `node`, `tool_name`, `args`, `status`, `started_at`,
-  `finished_at`, `result`/`error`
-- новые тулзы: `list_jobs`, `get_job`, `cancel_job`
-- все elevated-тулзы возвращают `{"job_id": ..., "status": "queued|running|..."}`
-  вместо `_status_response("...", upid)`
-
-### 2. Policy-движок вместо булева флага (high value, низкой сложности)
-
-`PROXMOX_ALLOW_ELEVATED=true` — слишком грубо для прода.
-
-- режимы: `deny_all` (default) / `allowlist` / `audit_only`
-- env: `PROXMOX_ELEVATED_ALLOW` = csv-список имён тулзов или regex
-- env: `PROXMOX_ELEVATED_DENY` = csv-список имён тулзов или regex
-- опционально: `PROXMOX_APPROVAL_TOKEN` — обязательный аргумент `approval` для
-  delete/rollback/exec, сравнивается через `secrets.compare_digest`
-- логировать каждое срабатывание (даже в audit_only)
-
-### 3. Backup / Restore тулзы (medium value)
-
-У нас только `get_cluster_backups`. Добавить:
-- `create_backup(node, vmid, storage, mode)` — `vzdump`
-- `list_backups(node, storage)` — фильтр по vmid
-- `restore_backup(node, vmid, archive, storage)`
-- `delete_backup(node, storage, volid)`
-
-### 4. ISO management (medium value)
-
-- `download_iso(node, storage, url, filename)` — `nodes/{node}/storage/{storage}/download-url`
-- `delete_iso(node, storage, volid)`
-
-### 5. SSH-exec для LXC (low value, требует paramiko)
-
-QEMU guest-agent в LXC нет. Сейчас `exec_vm_command` работает только для VM.
-Опционально добавить `exec_container_command` через paramiko + публичный
-ключ из ENV. Подумать — стоит ли вообще; добавляет тяжёлую зависимость и
-ещё один секрет для управления.
-
-### 6. Тесты + CI (high value, низкой сложности)
-
-- pytest + проверка регистрации всех 39 тулзов (smoke, как делал в конце ревизии)
-- mock proxmoxer и e2e-проверка хотя бы read-only тулзов
-- GitHub Actions: ruff + mypy + pytest на push
-
-### 7. mypy чистота
-
-Сейчас mypy ругается на отсутствие stubs для `mcp.server.fastmcp`,
-`proxmoxer`, `pydantic_settings`. Добавить в `pyproject.toml`:
-
-```toml
-[[tool.mypy.overrides]]
-module = ["mcp.*", "proxmoxer.*", "pydantic_settings.*"]
-ignore_missing_imports = true
-```
-
-### 8. Несрочное / nice-to-have
-
-- `--list-tools` режим у CLI для дебага
-- `PROXMOX_LOG_LEVEL` env + структурное логирование
-- метрики (prometheus-формат) — только если будет multi-user
-- Streamable HTTP transport — если когда-то понадобится hosted-режим
+- 38 тулзов: nodes (7), QEMU VM (14), LXC (11), storage (2), cluster (4)
+- 3-tier policy: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`
+- Все elevated-вызовы логируются в stderr (`ALLOW`/`DENY` + tool + tier)
+- Тесты: smoke регистрации + matrix policy (10 тестов)
+- CI: ruff + mypy + pytest на push/PR
+- Docker, Python 3.14, UV
 
 ---
 
-## Открытые вопросы
+## Сделано
 
-- стоит ли тащить SSH-exec в LXC ради паритета с Plus или оставить scope чисто
-  «через Proxmox API» (без paramiko)?
-- jobs in-memory или сразу SQLite? in-memory проще, но теряется при рестарте.
-- approval-токен — overkill для личного use, но абсолютно нужен если когда-то
-  расшарю сервер.
+- ✅ Initial commit, GitHub remote, README, CLAUDE.md
+- ✅ dev-deps (pytest/ruff/mypy), CI на GitHub Actions
+- ✅ mypy overrides для `mcp.*` / `proxmoxer.*` / `pydantic_settings.*`
+- ✅ tier-policy вместо булева `PROXMOX_ALLOW_ELEVATED` + аудит-лог
+- ✅ удалён `exec_vm_command` (для shell-доступа есть SSH; не дублируем)
+
+## Сознательно отброшено (с обоснованием)
+
+| Идея | Причина отказа |
+|------|----------------|
+| Persistent job store (UUID, SQLite) | UPID + `get_task_status` достаточно для personal use; in-memory пропадал бы при рестарте, SQLite — overkill |
+| ISO management (`download_iso`, `delete_iso`) | Редкая операция; проще сделать руками в Proxmox UI |
+| Backup / Restore тулзы | То же — редко, проще через UI или scheduled vzdump |
+| SSH-exec для LXC (через paramiko) | Дублирует SSH; тащит зависимость и секрет |
+| `exec_vm_command` через guest-agent | Дублирует SSH, самый большой blast-radius, async-сложность |
+| approval-токен для destructive ops | Бессмысленен в stdio (LLM сам введёт токен по запросу) |
+| OpenAPI-мост / hosted режим | Не нужно для stdio personal use |
+| Prometheus-метрики | Нужно только в multi-user |
+| Регекс-allowlist/denylist policy | Tier-вариант покрывает 80% сценариев в 10 раз меньше кода |
+
+---
+
+## Открытые направления (только on-demand)
+
+Не делать пока не появится конкретный pain:
+
+- **Структурное JSON-логирование** + `PROXMOX_LOG_LEVEL` — если текущий
+  человекочитаемый stderr-лог станет неудобным.
+- **`--list-tools` CLI-флаг** — для отладки регистрации без запуска MCP.
+- **Streamable HTTP transport** — только если понадобится remote-доступ.
+- **Обработка `ResourceException`** — сейчас исключения проксируются голым
+  трейсом; обернуть в `{"error": ...}` если LLM начнёт паниковать.
