@@ -1,6 +1,13 @@
 # proxmox-mcp
 
-Simples Proxmox MCP
+[![CI](https://github.com/akmalovaa/proxmox-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/akmalovaa/proxmox-mcp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/akmalovaa/proxmox-mcp)](https://github.com/akmalovaa/proxmox-mcp/releases)
+[![License: MIT](https://img.shields.io/github/license/akmalovaa/proxmox-mcp)](LICENSE)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![GHCR](https://img.shields.io/badge/ghcr-proxmox--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/akmalovaa/proxmox-mcp/pkgs/container/proxmox-mcp)
+[![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED)](https://modelcontextprotocol.io)
+
+Simple Proxmox MCP
 
 MCP server for managing Proxmox VE
 
@@ -25,9 +32,11 @@ MCP server for managing Proxmox VE
 export PROXMOX_HOST=192.168.1.100
 export PROXMOX_USER=root@pam
 export PROXMOX_PASSWORD=your-password
+
 # or use token auth (recommended):
 export PROXMOX_TOKEN_NAME=mcp
 export PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
 # optional:
 export PROXMOX_RISK_LEVEL=read
 ```
