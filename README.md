@@ -2,7 +2,7 @@
 
 MCP server for managing Proxmox VE through Claude Code, Claude Desktop, and any MCP-compatible client.
 
-39 tools: nodes, QEMU VMs, LXC containers, storage, cluster, tasks, snapshots, command execution.
+38 tools: nodes, QEMU VMs, LXC containers, storage, cluster, tasks, snapshots.
 
 ## Requirements
 
@@ -78,7 +78,7 @@ PROXMOX_RISK_LEVEL=read
 |-------|--------|
 | `read` (default) | Read-only tools only |
 | `lifecycle` | + start/stop/reboot/suspend/resume, clone, create snapshot |
-| `all` | + delete snapshot, rollback snapshot, exec via guest agent |
+| `all` | + delete snapshot, rollback snapshot |
 
 Every elevated call is logged to stderr (`ALLOW`/`DENY` + tool name + tier).
 
@@ -227,7 +227,7 @@ With Docker (password auth):
 | `get_task_status` | Status of a specific task by UPID |
 | `get_task_log` | Log output from a task |
 
-### QEMU VMs (15)
+### QEMU VMs (14)
 
 | Tool | Tier | Description |
 |------|------|-------------|
@@ -245,7 +245,6 @@ With Docker (password auth):
 | `create_vm_snapshot` | lifecycle | Create a snapshot |
 | `delete_vm_snapshot` | all | Delete a snapshot |
 | `rollback_vm_snapshot` | all | Rollback to a snapshot |
-| `exec_vm_command` | all | Execute command via QEMU Guest Agent |
 
 ### LXC Containers (11)
 

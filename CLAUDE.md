@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Proxmox MCP — MCP server for managing Proxmox VE clusters. Provides 39 tools for nodes, VMs (QEMU), containers (LXC), storage, cluster operations, snapshots, and command execution.
+Proxmox MCP — MCP server for managing Proxmox VE clusters. Provides 38 tools for nodes, VMs (QEMU), containers (LXC), storage, cluster operations, and snapshots.
 
 ## Tech Stack
 
@@ -25,7 +25,7 @@ src/proxmox_mcp/
 └── tools/
     ├── __init__.py    # register_all() — imports and registers all tool modules
     ├── nodes.py       # 7 tools: list_nodes, get_node_status, networks, disks, tasks
-    ├── vms.py         # 15 tools: list/status/config/snapshots + lifecycle/clone/exec
+    ├── vms.py         # 14 tools: list/status/config/snapshots + lifecycle/clone
     ├── containers.py  # 11 tools: list/status/config/snapshots + lifecycle
     ├── storage.py     # 2 tools: list_storage, get_storage_content
     └── cluster.py     # 4 tools: status, resources, backups, next_vmid
@@ -34,7 +34,7 @@ src/proxmox_mcp/
 ## Key Patterns
 
 - **Lifespan pattern**: Proxmoxer connection is created once in `client.py:lifespan()`, shared via `AppContext`
-- **Three-tier access**: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`. `read` exposes only GETs; `lifecycle` adds start/stop/clone/create-snapshot; `all` adds delete/rollback/exec.
+- **Three-tier access**: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`. `read` exposes only GETs; `lifecycle` adds start/stop/clone/create-snapshot; `all` adds delete/rollback snapshots.
 - **Tool registration**: each `tools/*.py` has a `register(mcp)` function that decorates functions with `@mcp.tool()`
 - **Context access**: `_ctx(ctx)` helper extracts `AppContext` from MCP context; `_tier(ctx, "lifecycle"|"all")` guards elevated ops and logs ALLOW/DENY to stderr
 - **Return format**: all tools return `json.dumps(data, indent=2)` — no formatting, no emoji, raw JSON for LLM

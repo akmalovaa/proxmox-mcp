@@ -1,9 +1,7 @@
-import asyncio
 import json
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
-from proxmoxer import ResourceException
 
 from proxmox_mcp.tools._common import _ctx, _status_response, _tier
 
@@ -215,44 +213,3 @@ def register(mcp: FastMCP) -> None:
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot(snapname).rollback.post()
         return _status_response("rolling_back", upid)
-
-    @mcp.tool()
-    async def exec_vm_command(
-        ctx: Context, node: str, vmid: int, command: str, timeout_s: int = 10
-    ) -> str:
-        """Execute a command inside a VM via QEMU Guest Agent.
-
-        The VM must have qemu-guest-agent running.
-        Requires PROXMOX_RISK_LEVEL=all.
-
-        Args:
-            node: Node name
-            vmid: VM ID
-            command: Shell command to execute
-            timeout_s: How long to wait for completion before returning still_running (default 10)
-        """
-        _tier(ctx, "all")
-        pve = _ctx(ctx).proxmox
-        result = await asyncio.to_thread(
-            pve.nodes(node).qemu(vmid).agent.exec.post, command=["sh", "-c", command]
-        )
-        pid = result.get("pid")
-
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + timeout_s
-        while loop.time() < deadline:
-            await asyncio.sleep(1)
-            try:
-                output = await asyncio.to_thread(
-                    pve.nodes(node).qemu(vmid).agent("exec-status").get, pid=pid
-                )
-            except ResourceException:
-                continue
-            if output.get("exited"):
-                return json.dumps(output, indent=2)
-
-        return json.dumps({
-            "pid": pid,
-            "status": "still_running",
-            "note": "Command exceeded timeout_s; result is no longer retrievable via this tool.",
-        })
