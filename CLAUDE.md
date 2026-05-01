@@ -4,6 +4,8 @@
 
 Proxmox MCP — MCP server for managing Proxmox VE clusters. Provides 38 tools for nodes, VMs (QEMU), containers (LXC), storage, cluster operations, and snapshots.
 
+`proxmox-mcp` — намеренно **простой** MCP для Proxmox VE. Личное использование,
+
 ## Tech Stack
 
 - **Python 3.14** with **UV** package manager
