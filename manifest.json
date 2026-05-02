@@ -20,15 +20,8 @@
     "type": "python",
     "entry_point": "src/proxmox_mcp/__main__.py",
     "mcp_config": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "${__dirname}",
-        "python",
-        "-m",
-        "proxmox_mcp"
-      ],
+      "command": "uvx",
+      "args": ["proxmox-ve-mcp"],
       "env": {
         "PROXMOX_HOST": "${user_config.proxmox_host}",
         "PROXMOX_PORT": "${user_config.proxmox_port}",
