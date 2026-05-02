@@ -22,3 +22,6 @@ wheels/
 
 # temp files
 temp/
+
+# MCPB build artifact
+*.mcpb

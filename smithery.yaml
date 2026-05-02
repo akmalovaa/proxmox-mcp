@@ -1,0 +1,74 @@
+# Smithery configuration: https://smithery.ai/docs/build/publish
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - proxmoxHost
+      - proxmoxTokenName
+      - proxmoxTokenValue
+    properties:
+      proxmoxHost:
+        type: string
+        description: IP address or hostname of the Proxmox VE server.
+      proxmoxPort:
+        type: string
+        default: "8006"
+        description: Proxmox VE API port.
+      proxmoxUser:
+        type: string
+        default: root@pam
+        description: Proxmox username with realm, e.g. root@pam.
+      proxmoxTokenName:
+        type: string
+        description: Proxmox API token ID (Datacenter > Permissions > API Tokens).
+      proxmoxTokenValue:
+        type: string
+        description: Secret value of the Proxmox API token.
+      proxmoxVerifySsl:
+        type: boolean
+        default: false
+        description: Verify TLS certificates. Set to false for self-signed homelab certificates.
+      proxmoxRiskLevel:
+        type: string
+        enum: [read, lifecycle, all]
+        default: read
+        description: |
+          Tool access tier.
+          - read: read-only operations (list, status, config, logs)
+          - lifecycle: + start/stop/reboot/clone/create-snapshot
+          - all: + delete-snapshot/rollback-snapshot
+    description: Configuration for running proxmox-mcp as a local stdio MCP server.
+  commandFunction: |-
+    (config) => ({
+      command: 'docker',
+      args: [
+        'run', '-i', '--rm',
+        '-e', 'PROXMOX_HOST',
+        '-e', 'PROXMOX_PORT',
+        '-e', 'PROXMOX_USER',
+        '-e', 'PROXMOX_TOKEN_NAME',
+        '-e', 'PROXMOX_TOKEN_VALUE',
+        '-e', 'PROXMOX_VERIFY_SSL',
+        '-e', 'PROXMOX_RISK_LEVEL',
+        'ghcr.io/akmalovaa/proxmox-mcp:latest'
+      ],
+      env: {
+        PROXMOX_HOST: config.proxmoxHost,
+        PROXMOX_PORT: String(config.proxmoxPort || '8006'),
+        PROXMOX_USER: config.proxmoxUser || 'root@pam',
+        PROXMOX_TOKEN_NAME: config.proxmoxTokenName,
+        PROXMOX_TOKEN_VALUE: config.proxmoxTokenValue,
+        PROXMOX_VERIFY_SSL: String(config.proxmoxVerifySsl ?? false),
+        PROXMOX_RISK_LEVEL: config.proxmoxRiskLevel || 'read'
+      }
+    })
+  exampleConfig:
+    proxmoxHost: pve.homelab.local
+    proxmoxPort: "8006"
+    proxmoxUser: root@pam
+    proxmoxTokenName: mcp-token
+    proxmoxTokenValue: 00000000-0000-0000-0000-000000000000
+    proxmoxVerifySsl: false
+    proxmoxRiskLevel: read

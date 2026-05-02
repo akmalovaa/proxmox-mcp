@@ -13,7 +13,7 @@
 [![GHCR](https://img.shields.io/badge/ghcr-proxmox--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/akmalovaa/proxmox-mcp/pkgs/container/proxmox-mcp)
 [![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED)](https://modelcontextprotocol.io)
 
-Simple Proxmox MCP
+## Simple Proxmox MCP
 
 MCP server for managing Proxmox VE
 
@@ -26,6 +26,9 @@ MCP server for managing Proxmox VE
 - **Read-only by default** — destructive ops are gated behind an explicit `PROXMOX_RISK_LEVEL`
 - **Tiny codebase** — pure stdio MCP over Proxmoxer, no HTTP server, no auth layer, no extras
 - **Raw JSON out** — no formatting, no emoji; LLM gets clean data
+
+[![proxmox-mcp MCP server](https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp/badges/card.svg)](https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp)
+
 
 ## Quick start
 

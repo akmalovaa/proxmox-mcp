@@ -1,0 +1,150 @@
+{
+  "manifest_version": "0.4",
+  "name": "proxmox-mcp",
+  "display_name": "Proxmox MCP",
+  "version": "0.1.0",
+  "description": "Minimal MCP server for Proxmox VE: 38 tools for nodes, QEMU VMs, LXC containers, storage, cluster, and snapshots.",
+  "long_description": "A deliberately minimal MCP server for managing Proxmox VE clusters. Exposes 38 tools covering nodes, QEMU VMs, LXC containers, storage, cluster operations, and snapshots. Read-only by default; lifecycle operations (start/stop/clone/snapshot) and destructive operations (delete/rollback) are gated behind explicit risk levels. Built with FastMCP and the official Proxmoxer client.",
+  "author": {
+    "name": "Artur Akmalov",
+    "url": "https://github.com/akmalovaa"
+  },
+  "homepage": "https://github.com/akmalovaa/proxmox-mcp",
+  "documentation": "https://github.com/akmalovaa/proxmox-mcp#readme",
+  "support": "https://github.com/akmalovaa/proxmox-mcp/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akmalovaa/proxmox-mcp"
+  },
+  "server": {
+    "type": "uv",
+    "entry_point": "src/proxmox_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "python",
+        "-m",
+        "proxmox_mcp"
+      ],
+      "env": {
+        "PROXMOX_HOST": "${user_config.proxmox_host}",
+        "PROXMOX_PORT": "${user_config.proxmox_port}",
+        "PROXMOX_USER": "${user_config.proxmox_user}",
+        "PROXMOX_TOKEN_NAME": "${user_config.proxmox_token_name}",
+        "PROXMOX_TOKEN_VALUE": "${user_config.proxmox_token_value}",
+        "PROXMOX_VERIFY_SSL": "${user_config.proxmox_verify_ssl}",
+        "PROXMOX_RISK_LEVEL": "${user_config.proxmox_risk_level}"
+      }
+    }
+  },
+  "user_config": {
+    "proxmox_host": {
+      "type": "string",
+      "title": "Proxmox Host",
+      "description": "IP address or hostname of your Proxmox VE server.",
+      "required": true
+    },
+    "proxmox_port": {
+      "type": "string",
+      "title": "Proxmox Port",
+      "description": "Proxmox VE API port.",
+      "default": "8006",
+      "required": false
+    },
+    "proxmox_user": {
+      "type": "string",
+      "title": "Proxmox User",
+      "description": "Proxmox username with realm, e.g. root@pam.",
+      "default": "root@pam",
+      "required": false
+    },
+    "proxmox_token_name": {
+      "type": "string",
+      "title": "API Token Name",
+      "description": "Proxmox API token ID. Create one in Datacenter > Permissions > API Tokens.",
+      "required": true
+    },
+    "proxmox_token_value": {
+      "type": "string",
+      "title": "API Token Value",
+      "description": "Secret value of the Proxmox API token. Stored securely; never logged.",
+      "required": true,
+      "sensitive": true
+    },
+    "proxmox_verify_ssl": {
+      "type": "string",
+      "title": "Verify SSL",
+      "description": "Set to 'true' to verify TLS certificates. Use 'false' for self-signed homelab certificates.",
+      "default": "false",
+      "required": false
+    },
+    "proxmox_risk_level": {
+      "type": "string",
+      "title": "Risk Level",
+      "description": "Tool access tier: 'read' = read-only (default), 'lifecycle' = + start/stop/reboot/clone/create-snapshot, 'all' = + delete/rollback snapshots.",
+      "default": "read",
+      "required": false
+    }
+  },
+  "tools": [
+    { "name": "list_nodes", "description": "List all nodes in the cluster with status, CPU, memory, uptime." },
+    { "name": "get_node_status", "description": "Detailed status of a node: CPU, memory, disk, load, kernel." },
+    { "name": "get_node_networks", "description": "List network interfaces on a node." },
+    { "name": "get_node_disks", "description": "List physical disks on a node." },
+    { "name": "get_node_tasks", "description": "List recent tasks on a node." },
+    { "name": "get_task_status", "description": "Get status of a specific task by UPID." },
+    { "name": "get_task_log", "description": "Get log output from a specific task." },
+    { "name": "list_vms", "description": "List all QEMU VMs, optionally filtered by node." },
+    { "name": "get_vm_status", "description": "Current VM status: running/stopped, CPU, memory." },
+    { "name": "get_vm_config", "description": "VM configuration: hardware, boot order, disks, network." },
+    { "name": "list_vm_snapshots", "description": "List all snapshots of a VM." },
+    { "name": "start_vm", "description": "Start a VM. Requires risk level lifecycle." },
+    { "name": "stop_vm", "description": "Force-stop a VM. Requires risk level lifecycle." },
+    { "name": "shutdown_vm", "description": "Gracefully shutdown a VM via ACPI. Requires risk level lifecycle." },
+    { "name": "reboot_vm", "description": "Reboot a VM via ACPI. Requires risk level lifecycle." },
+    { "name": "suspend_vm", "description": "Suspend a VM. Requires risk level lifecycle." },
+    { "name": "resume_vm", "description": "Resume a suspended VM. Requires risk level lifecycle." },
+    { "name": "clone_vm", "description": "Clone a VM (full or linked). Requires risk level lifecycle." },
+    { "name": "create_vm_snapshot", "description": "Create a VM snapshot. Requires risk level lifecycle." },
+    { "name": "delete_vm_snapshot", "description": "Delete a VM snapshot. Requires risk level all." },
+    { "name": "rollback_vm_snapshot", "description": "Rollback a VM to a snapshot. Requires risk level all." },
+    { "name": "list_containers", "description": "List all LXC containers, optionally filtered by node." },
+    { "name": "get_container_status", "description": "Current LXC container status." },
+    { "name": "get_container_config", "description": "LXC container configuration." },
+    { "name": "list_container_snapshots", "description": "List all snapshots of an LXC container." },
+    { "name": "start_container", "description": "Start an LXC container. Requires risk level lifecycle." },
+    { "name": "stop_container", "description": "Force-stop an LXC container. Requires risk level lifecycle." },
+    { "name": "shutdown_container", "description": "Gracefully shutdown an LXC container. Requires risk level lifecycle." },
+    { "name": "reboot_container", "description": "Reboot an LXC container. Requires risk level lifecycle." },
+    { "name": "create_container_snapshot", "description": "Create an LXC snapshot. Requires risk level lifecycle." },
+    { "name": "delete_container_snapshot", "description": "Delete an LXC snapshot. Requires risk level all." },
+    { "name": "rollback_container_snapshot", "description": "Rollback an LXC container to a snapshot. Requires risk level all." },
+    { "name": "list_storage", "description": "List storage pools with usage info." },
+    { "name": "get_storage_content", "description": "List ISOs, disk images, backups, templates in a storage pool." },
+    { "name": "get_cluster_status", "description": "Overall cluster status, quorum, node membership." },
+    { "name": "get_cluster_resources", "description": "List all cluster resources (VMs, containers, storage, nodes)." },
+    { "name": "get_cluster_backups", "description": "List all cluster backup jobs." },
+    { "name": "get_next_vmid", "description": "Get the next available VM/container ID." }
+  ],
+  "keywords": [
+    "proxmox",
+    "proxmox-ve",
+    "mcp",
+    "model-context-protocol",
+    "homelab",
+    "virtualization",
+    "qemu",
+    "lxc",
+    "claude"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.14"
+    }
+  }
+}
