@@ -131,3 +131,45 @@ Smithery quirks (already baked into our `manifest.json` — don't break them):
 - `server.type` **must be `python`** — `uv` is in the official MCPB spec but Smithery's CLI only recognizes `python`/`node`/`binary`/`bun`. The actual run command (`uv run python -m proxmox_mcp`) is unaffected.
 - **Do not add `tools[]` to manifest.** MCPB rejects `tools[].inputSchema` ("Unrecognized key"); Smithery backend rejects tools without `inputSchema` ("expected object, received undefined"). Conflict — easiest is to omit the `tools` key entirely. Tools are still announced dynamically via the MCP protocol when a client connects.
 - `proxmox-mcp.mcpb` is a build artifact — gitignored via `*.mcpb`.
+
+### Smithery scoring (Configuration UX)
+
+`smithery.yaml` configSchema is tuned for the "Configuration UX" rubric (Config schema 10pt + Optional config 15pt). Don't regress these:
+
+- **Required minimum** (`required:`) is only `proxmoxHost`, `proxmoxTokenName`, `proxmoxTokenValue`. Everything else has a `default` and stays optional.
+- Every property has `title` (UI label) and `description` (help text).
+- `proxmoxPort` is `integer` with `minimum: 1` / `maximum: 65535` (not a string).
+- `proxmoxTokenValue` has `format: password` + `writeOnly: true` so the Smithery UI renders a masked field.
+- `proxmoxHost`, `proxmoxUser`, `proxmoxTokenName` carry `examples: [...]` for inline placeholders.
+- Score is recomputed only on **published** releases — after editing the schema, run `mcpb pack .` + `smithery mcp publish` to refresh the score.
+
+### Smithery scoring (Capability Quality)
+
+The 40-point "Capability Quality" rubric covers tool-level metadata. Maintain these patterns when adding/editing tools:
+
+- **Descriptions** — every `@mcp.tool()` has a one-line docstring (extra details after a blank line). FastMCP does **not** parse Google-style `Args:` sections — keep the docstring focused on the tool's purpose, not parameters.
+- **Parameter descriptions** — every parameter uses `Annotated[T, Field(description="...")]` from `pydantic`. This is the only way descriptions land in `inputSchema.properties[*].description`. Never rely on docstring `Args:` blocks.
+- **Annotations** — every tool passes `annotations=READ_ONLY | LIFECYCLE | DESTRUCTIVE` (constants in `tools/_common.py`). Mapping:
+  - `READ_ONLY` — all GETs (`list_*`, `get_*`)
+  - `LIFECYCLE` — start/stop/reboot/shutdown/suspend/resume/clone/create-snapshot
+  - `DESTRUCTIVE` — delete/rollback (data loss possible)
+  - All three set `openWorldHint=True` because every tool calls the external Proxmox API.
+- **Naming** — snake_case `verb_noun` (`list_vms`, `get_vm_status`, `start_container`, `delete_container_snapshot`). Keep verbs consistent: `list_` for collections, `get_` for single records, `create_/delete_/rollback_` for snapshots.
+- **Output schemas** — currently auto-generated as `{result: string}` (tools return `json.dumps(...)`). Improving this would require returning Pydantic models / TypedDicts and using `structured_output=True` — not done yet, would take a meaningful refactor.
+
+Validation snippet (run after edits) — confirms descriptions land in `inputSchema` and annotations are attached:
+
+```bash
+uv run python -c "
+import asyncio, os
+os.environ.update(PROXMOX_HOST='x', PROXMOX_TOKEN_NAME='x', PROXMOX_TOKEN_VALUE='x')
+from proxmox_mcp.server import mcp
+async def m():
+    tools = await mcp.list_tools()
+    p = sum(1 for t in tools for x in t.inputSchema.get('properties', {}).values() if x.get('description'))
+    n = sum(len(t.inputSchema.get('properties', {})) for t in tools)
+    a = sum(1 for t in tools if t.annotations)
+    print(f'params w/ desc: {p}/{n}, annotated: {a}/{len(tools)}')
+asyncio.run(m())
+"
+```

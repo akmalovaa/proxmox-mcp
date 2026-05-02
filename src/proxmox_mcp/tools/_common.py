@@ -4,6 +4,7 @@ import logging
 from typing import Literal
 
 from mcp.server.fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from proxmox_mcp.client import AppContext
 
@@ -12,6 +13,26 @@ Tier = Literal["lifecycle", "all"]
 _TIER_ORDER = {"read": 0, "lifecycle": 1, "all": 2}
 
 logger = logging.getLogger("proxmox_mcp.policy")
+
+# MCP tool annotations (hints for clients).
+# openWorldHint=True for all — every tool talks to the external Proxmox API.
+READ_ONLY = ToolAnnotations(
+    readOnlyHint=True,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+LIFECYCLE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=False,
+    openWorldHint=True,
+)
 
 
 def _ctx(ctx: Context) -> AppContext:

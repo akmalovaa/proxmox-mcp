@@ -1,21 +1,38 @@
 import json
+from typing import Annotated
 
 from mcp.server.fastmcp import Context, FastMCP
+from pydantic import Field
 
-from proxmox_mcp.tools._common import _ctx, _status_response, _tier
+from proxmox_mcp.tools._common import (
+    DESTRUCTIVE,
+    LIFECYCLE,
+    READ_ONLY,
+    _ctx,
+    _status_response,
+    _tier,
+)
+
+NodeArg = Annotated[str, Field(description="Node name where the container resides.")]
+VmidArg = Annotated[int, Field(description="LXC container numeric ID.", ge=100, le=999999999)]
+SnapnameArg = Annotated[str, Field(description="Snapshot name.")]
 
 
 def register(mcp: FastMCP) -> None:
 
     # ── Read-only ──
 
-    @mcp.tool()
-    def list_containers(ctx: Context, node: str | None = None) -> str:
-        """List all LXC containers. Optionally filter by node.
-
-        Args:
-            node: Filter by node name. If omitted, lists containers from all nodes.
-        """
+    @mcp.tool(annotations=READ_ONLY)
+    def list_containers(
+        ctx: Context,
+        node: Annotated[
+            str | None,
+            Field(
+                description="Optional node name. If omitted, lists containers across the cluster."
+            ),
+        ] = None,
+    ) -> str:
+        """List all LXC containers in the cluster, optionally filtered by node."""
         pve = _ctx(ctx).proxmox
         if node:
             cts = pve.nodes(node).lxc.get()
@@ -25,109 +42,84 @@ def register(mcp: FastMCP) -> None:
             cts = [r for r in resources if r.get("type") == "lxc"]
         return json.dumps(cts, indent=2)
 
-    @mcp.tool()
-    def get_container_status(ctx: Context, node: str, vmid: int) -> str:
-        """Get current status of an LXC container.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-        """
+    @mcp.tool(annotations=READ_ONLY)
+    def get_container_status(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """Get current runtime status of an LXC container (running/stopped, CPU, memory)."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).lxc(vmid).status.current.get()
         return json.dumps(status, indent=2)
 
-    @mcp.tool()
-    def get_container_config(ctx: Context, node: str, vmid: int) -> str:
-        """Get LXC container configuration.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-        """
+    @mcp.tool(annotations=READ_ONLY)
+    def get_container_config(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """Get LXC container configuration: rootfs, network, resources, hostname."""
         pve = _ctx(ctx).proxmox
         config = pve.nodes(node).lxc(vmid).config.get()
         return json.dumps(config, indent=2)
 
-    @mcp.tool()
-    def list_container_snapshots(ctx: Context, node: str, vmid: int) -> str:
-        """List all snapshots of an LXC container.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-        """
+    @mcp.tool(annotations=READ_ONLY)
+    def list_container_snapshots(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """List all snapshots of an LXC container."""
         pve = _ctx(ctx).proxmox
         snapshots = pve.nodes(node).lxc(vmid).snapshot.get()
         return json.dumps(snapshots, indent=2)
 
     # ── Lifecycle (PROXMOX_RISK_LEVEL=lifecycle) ──
 
-    @mcp.tool()
-    def start_container(ctx: Context, node: str, vmid: int) -> str:
-        """Start an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-        """
+    @mcp.tool(annotations=LIFECYCLE)
+    def start_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """Start an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).lxc(vmid).status.start.post()
         return _status_response("starting", upid)
 
-    @mcp.tool()
-    def stop_container(ctx: Context, node: str, vmid: int) -> str:
-        """Force-stop an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-        """
+    @mcp.tool(annotations=LIFECYCLE)
+    def stop_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """Force-stop an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).lxc(vmid).status.stop.post()
         return _status_response("stopping", upid)
 
-    @mcp.tool()
-    def shutdown_container(ctx: Context, node: str, vmid: int, timeout: int = 60) -> str:
-        """Gracefully shutdown an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-            timeout: Seconds to wait before force-stop (default 60)
-        """
+    @mcp.tool(annotations=LIFECYCLE)
+    def shutdown_container(
+        ctx: Context,
+        node: NodeArg,
+        vmid: VmidArg,
+        timeout: Annotated[
+            int,
+            Field(
+                description="Seconds to wait for graceful shutdown before force-stop.",
+                ge=1,
+                le=3600,
+            ),
+        ] = 60,
+    ) -> str:
+        """Gracefully shutdown an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).lxc(vmid).status.shutdown.post(timeout=timeout)
         return _status_response("shutting_down", upid)
 
-    @mcp.tool()
-    def reboot_container(ctx: Context, node: str, vmid: int) -> str:
-        """Reboot an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle.
-
-        Args:
-            node: Node name
-            vmid: Container ID number
-        """
+    @mcp.tool(annotations=LIFECYCLE)
+    def reboot_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """Reboot an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).lxc(vmid).status.reboot.post()
         return _status_response("rebooting", upid)
 
-    @mcp.tool()
+    @mcp.tool(annotations=LIFECYCLE)
     def create_container_snapshot(
-        ctx: Context, node: str, vmid: int, snapname: str, description: str = ""
+        ctx: Context,
+        node: NodeArg,
+        vmid: VmidArg,
+        snapname: SnapnameArg,
+        description: Annotated[
+            str, Field(description="Optional human-readable description of the snapshot.")
+        ] = "",
     ) -> str:
-        """Create a snapshot of an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle.
-
-        Args:
-            node: Node name
-            vmid: Container ID
-            snapname: Snapshot name
-            description: Optional description
-        """
+        """Create a snapshot of an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).lxc(vmid).snapshot.post(
@@ -137,28 +129,36 @@ def register(mcp: FastMCP) -> None:
 
     # ── Destructive (PROXMOX_RISK_LEVEL=all) ──
 
-    @mcp.tool()
-    def delete_container_snapshot(ctx: Context, node: str, vmid: int, snapname: str) -> str:
-        """Delete an LXC container snapshot. Requires PROXMOX_RISK_LEVEL=all.
-
-        Args:
-            node: Node name
-            vmid: Container ID
-            snapname: Snapshot name to delete
-        """
+    @mcp.tool(annotations=DESTRUCTIVE)
+    def delete_container_snapshot(
+        ctx: Context,
+        node: NodeArg,
+        vmid: VmidArg,
+        snapname: Annotated[str, Field(description="Snapshot name to delete (irreversible).")],
+    ) -> str:
+        """Delete an LXC container snapshot. Irreversible. Requires PROXMOX_RISK_LEVEL=all."""
         _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).lxc(vmid).snapshot(snapname).delete()
         return _status_response("deleting_snapshot", upid)
 
-    @mcp.tool()
-    def rollback_container_snapshot(ctx: Context, node: str, vmid: int, snapname: str) -> str:
-        """Rollback an LXC container to a snapshot. Requires PROXMOX_RISK_LEVEL=all.
+    @mcp.tool(annotations=DESTRUCTIVE)
+    def rollback_container_snapshot(
+        ctx: Context,
+        node: NodeArg,
+        vmid: VmidArg,
+        snapname: Annotated[
+            str,
+            Field(
+                description=(
+                    "Snapshot name to roll back to. Discards all changes since then."
+                )
+            ),
+        ],
+    ) -> str:
+        """Roll back an LXC container to a snapshot. Discards changes since then.
 
-        Args:
-            node: Node name
-            vmid: Container ID
-            snapname: Snapshot name to rollback to
+        Requires PROXMOX_RISK_LEVEL=all.
         """
         _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
