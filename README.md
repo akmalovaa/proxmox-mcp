@@ -1,6 +1,6 @@
-# Proxmox-mcp
-
 <!-- mcp-name: io.github.akmalovaa/proxmox-mcp -->
+
+# Proxmox MCP server
 
 <p align="center">
   <img src="docs/banner.png" alt="proxmox-mcp — MCP server for Proxmox VE" width="720"/>
@@ -12,8 +12,13 @@
 [![Python 3.14](https://img.shields.io/badge/python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![GHCR](https://img.shields.io/badge/ghcr-proxmox--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/akmalovaa/proxmox-mcp/pkgs/container/proxmox-mcp)
 [![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED)](https://modelcontextprotocol.io)
+[![smithery badge](https://smithery.ai/badge/akmalovaa/proxmox-mcp)](https://smithery.ai/servers/akmalovaa/proxmox-mcp)
 
 ## Simple Proxmox MCP
+
+<p align="center">
+  <img src="docs/logo.png" alt="proxmox-mcp logo" width="140"/>
+</p>
 
 MCP server for managing Proxmox VE
 

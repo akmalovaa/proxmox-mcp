@@ -4,7 +4,11 @@
 
 `proxmox-mcp` is a deliberately **minimal** MCP server for Proxmox VE — built for personal use, stdio transport only, no extra layers. Exposes 38 tools covering nodes, QEMU VMs, LXC containers, storage, cluster operations, and snapshots.
 
-Pre-built image published to GHCR: `ghcr.io/akmalovaa/proxmox-mcp:latest` (multi-arch: `amd64` + `arm64`).
+## Public listings
+
+- **GHCR image**: `ghcr.io/akmalovaa/proxmox-mcp:latest` (multi-arch `amd64` + `arm64`).
+- **Smithery**: https://smithery.ai/server/akmalovaa/proxmox-mcp — releases at https://smithery.ai/servers/akmalovaa/proxmox-mcp/releases. Published via `mcpb pack .` → `smithery mcp publish ./proxmox-mcp.mcpb -n akmalovaa/proxmox-mcp`.
+- **Glama**: https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp — score/audit at https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp/score. Builds the Dockerfile from main branch on Deploy.
 
 ## Tech Stack
 
@@ -20,6 +24,10 @@ Pre-built image published to GHCR: `ghcr.io/akmalovaa/proxmox-mcp:latest` (multi
 ├── compose.yaml                        # Dev-only: builds local image with build: .
 ├── .dockerignore
 ├── .env.example                        # Template for local dev env vars
+├── manifest.json                       # MCPB manifest for Smithery (server.type=python, no tools[] — see "Smithery quirks")
+├── smithery.yaml                       # Smithery startCommand + configSchema (docker run via GHCR)
+├── .mcpbignore                         # Files excluded from .mcpb bundle (keeps it lean ~15kB)
+├── glama.json                          # Glama maintainers file
 ├── .github/workflows/
 │   ├── ci.yml                          # ruff + mypy + pytest on push/PR to main
 │   └── docker-publish.yml              # Multi-arch GHCR publish on tag pushes '*.*.*'
@@ -28,7 +36,7 @@ src/proxmox_mcp/
 ├── __main__.py                         # `uv run python -m proxmox_mcp`
 ├── server.py                           # FastMCP instance, tool registration, entry point
 ├── config.py                           # Settings class (env vars with PROXMOX_ prefix)
-├── client.py                           # AppContext dataclass, lifespan (Proxmoxer connection)
+├── client.py                           # AppContext (lazy ProxmoxAPI property), lifespan
 └── tools/
     ├── __init__.py                     # register_all() — imports and registers all tool modules
     ├── nodes.py                        # 7 tools: list_nodes, get_node_status, networks, disks, tasks
@@ -40,7 +48,7 @@ src/proxmox_mcp/
 
 ## Key Patterns
 
-- **Lifespan pattern**: Proxmoxer connection is created once in `client.py:lifespan()`, shared via `AppContext`
+- **Lazy connect**: `AppContext.proxmox` is a `@property` that builds the `ProxmoxAPI` on first access. The lifespan only constructs `Settings()`. Reason: the server must start cleanly even when Proxmox is unreachable (e.g. Glama/Smithery sandboxes), so eager `proxmox.version.get()` was removed. Tool calls surface connection errors via the normal error path.
 - **Three-tier access**: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`. `read` exposes only GETs; `lifecycle` adds start/stop/clone/create-snapshot; `all` adds delete/rollback snapshots.
 - **Tool registration**: each `tools/*.py` has a `register(mcp)` function that decorates functions with `@mcp.tool()`
 - **Context access**: `_ctx(ctx)` helper extracts `AppContext` from MCP context; `_tier(ctx, "lifecycle"|"all")` guards elevated ops and logs ALLOW/DENY to stderr
@@ -110,3 +118,16 @@ All via environment variables (prefix `PROXMOX_`):
 ## Release flow
 
 To cut a release: `git tag 1.2.3 && git push --tags`. `docker-publish.yml` will build and push `:1.2.3`, `:1.2`, `:sha-<short>` and move `:latest` to point at the new release. Pushes to `main` no longer trigger image builds — only tag pushes do.
+
+## Republishing to Smithery
+
+```bash
+mcpb pack .                                                     # produces proxmox-mcp.mcpb (~15kB)
+smithery mcp publish ./proxmox-mcp.mcpb -n akmalovaa/proxmox-mcp
+```
+
+Smithery quirks (already baked into our `manifest.json` — don't break them):
+
+- `server.type` **must be `python`** — `uv` is in the official MCPB spec but Smithery's CLI only recognizes `python`/`node`/`binary`/`bun`. The actual run command (`uv run python -m proxmox_mcp`) is unaffected.
+- **Do not add `tools[]` to manifest.** MCPB rejects `tools[].inputSchema` ("Unrecognized key"); Smithery backend rejects tools without `inputSchema` ("expected object, received undefined"). Conflict — easiest is to omit the `tools` key entirely. Tools are still announced dynamically via the MCP protocol when a client connects.
+- `proxmox-mcp.mcpb` is a build artifact — gitignored via `*.mcpb`.

@@ -11,27 +11,46 @@ startCommand:
     properties:
       proxmoxHost:
         type: string
+        title: Proxmox Host
         description: IP address or hostname of the Proxmox VE server.
+        examples:
+          - pve.homelab.local
+          - 192.168.1.10
       proxmoxPort:
-        type: string
-        default: "8006"
+        type: integer
+        title: Proxmox API Port
+        default: 8006
+        minimum: 1
+        maximum: 65535
         description: Proxmox VE API port.
       proxmoxUser:
         type: string
+        title: Proxmox User
         default: root@pam
         description: Proxmox username with realm, e.g. root@pam.
+        examples:
+          - root@pam
+          - mcp@pve
       proxmoxTokenName:
         type: string
+        title: API Token Name
         description: Proxmox API token ID (Datacenter > Permissions > API Tokens).
+        examples:
+          - mcp-token
       proxmoxTokenValue:
         type: string
-        description: Secret value of the Proxmox API token.
+        title: API Token Value
+        format: password
+        writeOnly: true
+        description: Secret value of the Proxmox API token. Stored securely; never logged.
       proxmoxVerifySsl:
         type: boolean
+        title: Verify SSL
         default: false
         description: Verify TLS certificates. Set to false for self-signed homelab certificates.
       proxmoxRiskLevel:
         type: string
+        title: Risk Level
         enum: [read, lifecycle, all]
         default: read
         description: |
@@ -56,7 +75,7 @@ startCommand:
       ],
       env: {
         PROXMOX_HOST: config.proxmoxHost,
-        PROXMOX_PORT: String(config.proxmoxPort || '8006'),
+        PROXMOX_PORT: String(config.proxmoxPort ?? 8006),
         PROXMOX_USER: config.proxmoxUser || 'root@pam',
         PROXMOX_TOKEN_NAME: config.proxmoxTokenName,
         PROXMOX_TOKEN_VALUE: config.proxmoxTokenValue,
@@ -66,7 +85,7 @@ startCommand:
     })
   exampleConfig:
     proxmoxHost: pve.homelab.local
-    proxmoxPort: "8006"
+    proxmoxPort: 8006
     proxmoxUser: root@pam
     proxmoxTokenName: mcp-token
     proxmoxTokenValue: 00000000-0000-0000-0000-000000000000
