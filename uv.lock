@@ -445,8 +445,8 @@ wheels = [
 ]
 
 [[package]]
-name = "proxmox-mcp"
-version = "0.1.0"
+name = "proxmox-ve-mcp"
+version = "1.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
