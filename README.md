@@ -1,4 +1,10 @@
-# proxmox-mcp
+# Proxmox-mcp
+
+<!-- mcp-name: io.github.akmalovaa/proxmox-mcp -->
+
+<p align="center">
+  <img src="docs/banner.png" alt="proxmox-mcp — MCP server for Proxmox VE" width="720"/>
+</p>
 
 [![CI](https://github.com/akmalovaa/proxmox-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/akmalovaa/proxmox-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akmalovaa/proxmox-mcp)](https://github.com/akmalovaa/proxmox-mcp/releases)
