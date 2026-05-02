@@ -12,7 +12,6 @@
 [![Python 3.14](https://img.shields.io/badge/python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![GHCR](https://img.shields.io/badge/ghcr-proxmox--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/akmalovaa/proxmox-mcp/pkgs/container/proxmox-mcp)
 [![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED)](https://modelcontextprotocol.io)
-[![smithery badge](https://smithery.ai/badge/akmalovaa/proxmox-mcp)](https://smithery.ai/servers/akmalovaa/proxmox-mcp)
 
 ## Simple Proxmox MCP
 
@@ -248,7 +247,7 @@ MCP client config:
   "mcpServers": {
     "proxmox": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/proxmox-mcp", "proxmox-mcp"],
+      "args": ["run", "--directory", "/path/to/proxmox-mcp", "python", "-m", "proxmox_mcp"],
       "env": {
         "PROXMOX_HOST": "192.168.1.100",
         "PROXMOX_TOKEN_NAME": "mcp",
