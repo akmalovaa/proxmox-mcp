@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "proxmox-mcp",
   "display_name": "Proxmox MCP",
-  "version": "0.1.0",
+  "version": "1.0.5",
   "description": "Minimal MCP server for Proxmox VE: 38 tools for nodes, QEMU VMs, LXC containers, storage, cluster, and snapshots.",
   "long_description": "A deliberately minimal MCP server for managing Proxmox VE clusters. Exposes 38 tools covering nodes, QEMU VMs, LXC containers, storage, cluster operations, and snapshots. Read-only by default; lifecycle operations (start/stop/clone/snapshot) and destructive operations (delete/rollback) are gated behind explicit risk levels. Built with FastMCP and the official Proxmoxer client.",
   "author": {
