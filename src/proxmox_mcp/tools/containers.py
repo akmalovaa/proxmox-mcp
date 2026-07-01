@@ -4,6 +4,7 @@ from typing import Annotated
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 
+from proxmox_mcp.config import RiskLevel
 from proxmox_mcp.tools._common import (
     DESTRUCTIVE,
     LIFECYCLE,
@@ -11,6 +12,7 @@ from proxmox_mcp.tools._common import (
     _ctx,
     _status_response,
     _tier,
+    make_gate,
 )
 
 NodeArg = Annotated[str, Field(description="Node name where the container resides.")]
@@ -18,11 +20,12 @@ VmidArg = Annotated[int, Field(description="LXC container numeric ID.", ge=100, 
 SnapnameArg = Annotated[str, Field(description="Snapshot name.")]
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: FastMCP, risk_level: RiskLevel) -> None:
+    tool = make_gate(mcp, risk_level)
 
     # ── Read-only ──
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def list_containers(
         ctx: Context,
         node: Annotated[
@@ -42,21 +45,21 @@ def register(mcp: FastMCP) -> None:
             cts = [r for r in resources if r.get("type") == "lxc"]
         return json.dumps(cts, indent=2)
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def get_container_status(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get current runtime status of an LXC container (running/stopped, CPU, memory)."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).lxc(vmid).status.current.get()
         return json.dumps(status, indent=2)
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def get_container_config(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get LXC container configuration: rootfs, network, resources, hostname."""
         pve = _ctx(ctx).proxmox
         config = pve.nodes(node).lxc(vmid).config.get()
         return json.dumps(config, indent=2)
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def list_container_snapshots(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """List all snapshots of an LXC container."""
         pve = _ctx(ctx).proxmox
@@ -65,7 +68,7 @@ def register(mcp: FastMCP) -> None:
 
     # ── Lifecycle (PROXMOX_RISK_LEVEL=lifecycle) ──
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def start_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Start an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -73,7 +76,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).lxc(vmid).status.start.post()
         return _status_response("starting", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def stop_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Force-stop an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -81,7 +84,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).lxc(vmid).status.stop.post()
         return _status_response("stopping", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def shutdown_container(
         ctx: Context,
         node: NodeArg,
@@ -101,7 +104,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).lxc(vmid).status.shutdown.post(timeout=timeout)
         return _status_response("shutting_down", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def reboot_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Reboot an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -109,7 +112,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).lxc(vmid).status.reboot.post()
         return _status_response("rebooting", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def create_container_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -129,7 +132,7 @@ def register(mcp: FastMCP) -> None:
 
     # ── Destructive (PROXMOX_RISK_LEVEL=all) ──
 
-    @mcp.tool(annotations=DESTRUCTIVE)
+    @tool(annotations=DESTRUCTIVE)
     def delete_container_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -142,7 +145,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).lxc(vmid).snapshot(snapname).delete()
         return _status_response("deleting_snapshot", upid)
 
-    @mcp.tool(annotations=DESTRUCTIVE)
+    @tool(annotations=DESTRUCTIVE)
     def rollback_container_snapshot(
         ctx: Context,
         node: NodeArg,

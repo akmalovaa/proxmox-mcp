@@ -1,8 +1,23 @@
-from typing import Any, Literal
+import os
+from typing import Any, Literal, get_args
 
 from pydantic_settings import BaseSettings
 
 RiskLevel = Literal["read", "lifecycle", "all"]
+
+
+def get_risk_level() -> RiskLevel:
+    """Read PROXMOX_RISK_LEVEL from the environment for registration-time gating.
+
+    Kept separate from ``Settings`` because tool registration happens at import,
+    before (and without) a full ``Settings`` — which requires ``host`` — exists.
+    """
+    value = os.environ.get("PROXMOX_RISK_LEVEL", "read").lower()
+    if value not in get_args(RiskLevel):
+        raise ValueError(
+            f"PROXMOX_RISK_LEVEL must be one of {get_args(RiskLevel)} (got '{value}')"
+        )
+    return value  # type: ignore[return-value]
 
 
 class Settings(BaseSettings):

@@ -1,12 +1,14 @@
 import inspect
 import json
 import logging
-from typing import Literal
+from collections.abc import Callable
+from typing import Any, Literal
 
-from mcp.server.fastmcp import Context
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from proxmox_mcp.client import AppContext
+from proxmox_mcp.config import RiskLevel
 
 Tier = Literal["lifecycle", "all"]
 
@@ -33,6 +35,38 @@ DESTRUCTIVE = ToolAnnotations(
     idempotentHint=False,
     openWorldHint=True,
 )
+
+
+def _required_tier(annotations: ToolAnnotations | None) -> str:
+    """Map a tool's annotations to the risk tier required to expose it."""
+    if annotations is DESTRUCTIVE:
+        return "all"
+    if annotations is LIFECYCLE:
+        return "lifecycle"
+    return "read"
+
+
+def make_gate(
+    mcp: FastMCP, risk_level: RiskLevel
+) -> Callable[..., Callable[[Callable[..., Any]], Callable[..., Any]]]:
+    """Return a drop-in ``@tool(...)`` decorator that gates registration by tier.
+
+    The required tier is inferred from the ``annotations=`` kwarg (READ_ONLY /
+    LIFECYCLE / DESTRUCTIVE), so a tool above ``risk_level`` is never registered
+    and stays out of the client's tool list. ``_tier`` still guards at call time
+    as defense in depth.
+    """
+    current = _TIER_ORDER[risk_level]
+
+    def tool(**kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        enabled = current >= _TIER_ORDER[_required_tier(kwargs.get("annotations"))]
+
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+            return mcp.tool(**kwargs)(fn) if enabled else fn
+
+        return decorator
+
+    return tool
 
 
 def _ctx(ctx: Context) -> AppContext:

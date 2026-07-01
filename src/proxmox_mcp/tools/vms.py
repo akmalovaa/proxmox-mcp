@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 
+from proxmox_mcp.config import RiskLevel
 from proxmox_mcp.tools._common import (
     DESTRUCTIVE,
     LIFECYCLE,
@@ -11,6 +12,7 @@ from proxmox_mcp.tools._common import (
     _ctx,
     _status_response,
     _tier,
+    make_gate,
 )
 
 NodeArg = Annotated[str, Field(description="Node name where the VM resides.")]
@@ -18,11 +20,12 @@ VmidArg = Annotated[int, Field(description="QEMU VM numeric ID.", ge=100, le=999
 SnapnameArg = Annotated[str, Field(description="Snapshot name.")]
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: FastMCP, risk_level: RiskLevel) -> None:
+    tool = make_gate(mcp, risk_level)
 
     # ── Read-only ──
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def list_vms(
         ctx: Context,
         node: Annotated[
@@ -40,21 +43,21 @@ def register(mcp: FastMCP) -> None:
             vms = [r for r in resources if r.get("type") == "qemu"]
         return json.dumps(vms, indent=2)
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def get_vm_status(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get current runtime status of a VM (running/stopped, CPU, memory, uptime)."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).qemu(vmid).status.current.get()
         return json.dumps(status, indent=2)
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def get_vm_config(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get VM configuration: hardware, boot order, disks, network, cloud-init, etc."""
         pve = _ctx(ctx).proxmox
         config = pve.nodes(node).qemu(vmid).config.get()
         return json.dumps(config, indent=2)
 
-    @mcp.tool(annotations=READ_ONLY)
+    @tool(annotations=READ_ONLY)
     def list_vm_snapshots(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """List all snapshots of a VM."""
         pve = _ctx(ctx).proxmox
@@ -63,7 +66,7 @@ def register(mcp: FastMCP) -> None:
 
     # ── Lifecycle (PROXMOX_RISK_LEVEL=lifecycle) ──
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def start_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Start a VM. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -71,7 +74,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).status.start.post()
         return _status_response("starting", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def stop_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Force-stop a VM (like pulling the power). Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -79,7 +82,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).status.stop.post()
         return _status_response("stopping", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def shutdown_vm(
         ctx: Context,
         node: NodeArg,
@@ -99,7 +102,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).status.shutdown.post(timeout=timeout)
         return _status_response("shutting_down", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def reboot_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Reboot a VM via ACPI. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -107,7 +110,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).status.reboot.post()
         return _status_response("rebooting", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def suspend_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Suspend a VM (pause execution, keep memory). Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -115,7 +118,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).status.suspend.post()
         return _status_response("suspending", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def resume_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Resume a suspended VM. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -123,7 +126,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).status.resume.post()
         return _status_response("resuming", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def clone_vm(
         ctx: Context,
         node: NodeArg,
@@ -157,7 +160,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).clone.post(**params)
         return _status_response("cloning", upid)
 
-    @mcp.tool(annotations=LIFECYCLE)
+    @tool(annotations=LIFECYCLE)
     def create_vm_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -177,7 +180,7 @@ def register(mcp: FastMCP) -> None:
 
     # ── Destructive (PROXMOX_RISK_LEVEL=all) ──
 
-    @mcp.tool(annotations=DESTRUCTIVE)
+    @tool(annotations=DESTRUCTIVE)
     def delete_vm_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -190,7 +193,7 @@ def register(mcp: FastMCP) -> None:
         upid = pve.nodes(node).qemu(vmid).snapshot(snapname).delete()
         return _status_response("deleting_snapshot", upid)
 
-    @mcp.tool(annotations=DESTRUCTIVE)
+    @tool(annotations=DESTRUCTIVE)
     def rollback_vm_snapshot(
         ctx: Context,
         node: NodeArg,

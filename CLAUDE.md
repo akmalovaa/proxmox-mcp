@@ -47,9 +47,13 @@ src/proxmox_mcp/
 ## Key Patterns
 
 - **Lazy connect**: `AppContext.proxmox` is a `@property` that builds the `ProxmoxAPI` on first access. The lifespan only constructs `Settings()`. Reason: the server must start cleanly even when Proxmox is unreachable (e.g. CI tool-listing, registry sandboxes), so eager `proxmox.version.get()` was removed. Tool calls surface connection errors via the normal error path.
-- **Three-tier access**: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`. `read` exposes only GETs; `lifecycle` adds start/stop/clone/create-snapshot; `all` adds delete/rollback snapshots.
-- **Tool registration**: each `tools/*.py` has a `register(mcp)` function that decorates functions with `@mcp.tool()`.
-- **Context access**: `_ctx(ctx)` extracts `AppContext` from MCP context; `_tier(ctx, "lifecycle"|"all")` guards elevated ops and logs ALLOW/DENY to stderr.
+- **Three-tier access**: `PROXMOX_RISK_LEVEL` = `read` (default) / `lifecycle` / `all`. Tools are gated **at registration time**, so a level only ever exposes the tools it allows — they never appear in the client's tool list otherwise:
+  - `read` → 21 read-only GET tools
+  - `lifecycle` → +13 start/stop/reboot/clone/create-snapshot (34 total)
+  - `all` → +4 delete/rollback (38 total)
+- **Registration gating**: `make_gate(mcp, risk_level)` (in `tools/_common.py`) returns a `@tool(...)` decorator used in place of `@mcp.tool(...)`. It infers the required tier from the `annotations=` kwarg (READ_ONLY→read, LIFECYCLE→lifecycle, DESTRUCTIVE→all) and skips registering any tool above the active level. `server.py` reads the level via `config.get_risk_level()` at import (separate from `Settings`, which needs `host`).
+- **Tool registration**: each `tools/*.py` has a `register(mcp, risk_level)` function that builds `tool = make_gate(...)` then decorates functions with `@tool()`.
+- **Context access**: `_ctx(ctx)` extracts `AppContext` from MCP context; `_tier(ctx, "lifecycle"|"all")` guards elevated ops at call time (defense in depth on top of registration gating) and logs ALLOW/DENY to stderr.
 - **Return format**: all tools return `json.dumps(data, indent=2)` — no formatting, no emoji, raw JSON for LLM.
 
 ## Commands
@@ -102,16 +106,16 @@ All via environment variables (prefix `PROXMOX_`):
 ## Adding New Tools
 
 1. Create or edit a file in `src/proxmox_mcp/tools/`.
-2. Add a `register(mcp: FastMCP)` function with `@mcp.tool()` decorated handlers.
+2. Add a `register(mcp: FastMCP, risk_level: RiskLevel)` function; build `tool = make_gate(mcp, risk_level)` and decorate handlers with `@tool()` (not `@mcp.tool()`) so they are gated by tier.
 3. Each tool gets `ctx: Context` as first param; use `_ctx(ctx).proxmox` for the API client.
-4. For elevated operations, call `_tier(ctx, "lifecycle")` or `_tier(ctx, "all")` at the start.
-5. Register the module in `tools/__init__.py`.
+4. For elevated operations, call `_tier(ctx, "lifecycle")` or `_tier(ctx, "all")` at the start (call-time guard on top of the registration gate).
+5. Register the module in `tools/__init__.py` (pass `risk_level` through).
 
 ### Tool quality patterns
 
 - **Descriptions** — every `@mcp.tool()` has a one-line docstring (extra details after a blank line). FastMCP does **not** parse Google-style `Args:` sections — keep the docstring focused on the tool's purpose, not parameters.
 - **Parameter descriptions** — every parameter uses `Annotated[T, Field(description="...")]` from `pydantic`. This is the only way descriptions land in `inputSchema.properties[*].description`.
-- **Annotations** — every tool passes `annotations=READ_ONLY | LIFECYCLE | DESTRUCTIVE` (constants in `tools/_common.py`). All three set `openWorldHint=True` because every tool calls the external Proxmox API.
+- **Annotations** — every tool passes `annotations=READ_ONLY | LIFECYCLE | DESTRUCTIVE` (constants in `tools/_common.py`). All three set `openWorldHint=True` because every tool calls the external Proxmox API. The annotation also drives registration gating (see "Registration gating"), so picking the right one is what places a tool in the correct tier.
   - `READ_ONLY` — all GETs (`list_*`, `get_*`)
   - `LIFECYCLE` — start/stop/reboot/shutdown/suspend/resume/clone/create-snapshot
   - `DESTRUCTIVE` — delete/rollback (data loss possible)
@@ -120,16 +124,17 @@ All via environment variables (prefix `PROXMOX_`):
 Validation snippet (run after edits) — confirms descriptions land in `inputSchema` and annotations are attached:
 
 ```bash
+# PROXMOX_RISK_LEVEL=all exposes every tool so the snippet validates all 38.
 uv run python -c "
 import asyncio, os
-os.environ.update(PROXMOX_HOST='x', PROXMOX_TOKEN_NAME='x', PROXMOX_TOKEN_VALUE='x')
+os.environ.update(PROXMOX_HOST='x', PROXMOX_TOKEN_NAME='x', PROXMOX_TOKEN_VALUE='x', PROXMOX_RISK_LEVEL='all')
 from proxmox_mcp.server import mcp
 async def m():
     tools = await mcp.list_tools()
     p = sum(1 for t in tools for x in t.inputSchema.get('properties', {}).values() if x.get('description'))
     n = sum(len(t.inputSchema.get('properties', {})) for t in tools)
     a = sum(1 for t in tools if t.annotations)
-    print(f'params w/ desc: {p}/{n}, annotated: {a}/{len(tools)}')
+    print(f'tools: {len(tools)}, params w/ desc: {p}/{n}, annotated: {a}/{len(tools)}')
 asyncio.run(m())
 "
 ```

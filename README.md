@@ -129,15 +129,15 @@ export PROXMOX_PASSWORD=your-password
 
 ### Risk levels
 
-`PROXMOX_RISK_LEVEL` gates destructive operations:
+`PROXMOX_RISK_LEVEL` controls which tools exist. Tools above the active level are **not registered**, so they never appear in the MCP client's tool list:
 
-| Level | Adds |
-|-------|------|
-| `read` *(default)* | read-only tools |
-| `lifecycle` | + start / stop / reboot / suspend / clone / create-snapshot |
-| `all` | + delete-snapshot / rollback-snapshot |
+| Level | Tools | Adds |
+|-------|-------|------|
+| `read` *(default)* | 21 | read-only tools |
+| `lifecycle` | 34 | + start / stop / reboot / suspend / clone / create-snapshot |
+| `all` | 38 | + delete-snapshot / rollback-snapshot |
 
-Every elevated call is logged to stderr (`ALLOW` / `DENY` + tool + tier).
+Each elevated call is also re-checked at call time and logged to stderr (`ALLOW` / `DENY` + tool + tier).
 
 ## Tools
 
