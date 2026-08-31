@@ -1,4 +1,3 @@
-import json
 from typing import Annotated
 
 from mcp.server.mcpserver import Context, MCPServer
@@ -9,7 +8,10 @@ from proxmox_mcp.tools._common import (
     DESTRUCTIVE,
     LIFECYCLE,
     READ_ONLY,
+    RrdCf,
+    Timeframe,
     _ctx,
+    _json,
     _status_response,
     _tier,
     make_gate,
@@ -25,7 +27,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
 
     # ── Read-only ──
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="List containers", annotations=READ_ONLY)
     def list_containers(
         ctx: Context,
         node: Annotated[
@@ -43,32 +45,68 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         else:
             resources = pve.cluster.resources.get(type="vm")
             cts = [r for r in resources if r.get("type") == "lxc"]
-        return json.dumps(cts, indent=2)
+        return _json(cts)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Container status", annotations=READ_ONLY)
     def get_container_status(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get current runtime status of an LXC container (running/stopped, CPU, memory)."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).lxc(vmid).status.current.get()
-        return json.dumps(status, indent=2)
+        return _json(status)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Container config", annotations=READ_ONLY)
     def get_container_config(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get LXC container configuration: rootfs, network, resources, hostname."""
         pve = _ctx(ctx).proxmox
         config = pve.nodes(node).lxc(vmid).config.get()
-        return json.dumps(config, indent=2)
+        return _json(config)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Container IP addresses", annotations=READ_ONLY)
+    def get_container_interfaces(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
+        """Get a running LXC container's network interfaces and IP addresses.
+
+        This is the way to learn a container's actual IP — get_container_config shows
+        the configured net device (which may be DHCP), not the address in use. No guest
+        agent is needed, but the container must be running.
+        """
+        pve = _ctx(ctx).proxmox
+        interfaces = pve.nodes(node).lxc(vmid).interfaces.get()
+        return _json(interfaces)
+
+    @tool(title="Container metrics history", annotations=READ_ONLY)
+    def get_container_rrd_data(
+        ctx: Context,
+        node: NodeArg,
+        vmid: VmidArg,
+        timeframe: Annotated[
+            Timeframe,
+            Field(description="Window of history to return, counting back from now."),
+        ] = "day",
+        cf: Annotated[
+            RrdCf,
+            Field(
+                description=(
+                    "How each sample bucket is condensed: 'AVERAGE' for typical load, "
+                    "'MAX' to catch spikes that averaging hides."
+                )
+            ),
+        ] = "AVERAGE",
+    ) -> str:
+        """Get historical CPU, memory, disk and network metrics for a container (RRD series)."""
+        pve = _ctx(ctx).proxmox
+        data = pve.nodes(node).lxc(vmid).rrddata.get(timeframe=timeframe, cf=cf)
+        return _json(data)
+
+    @tool(title="List container snapshots", annotations=READ_ONLY)
     def list_container_snapshots(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """List all snapshots of an LXC container."""
         pve = _ctx(ctx).proxmox
         snapshots = pve.nodes(node).lxc(vmid).snapshot.get()
-        return json.dumps(snapshots, indent=2)
+        return _json(snapshots)
 
     # ── Lifecycle (PROXMOX_RISK_LEVEL=lifecycle) ──
 
-    @tool(annotations=LIFECYCLE)
+    @tool(title="Start container", annotations=LIFECYCLE)
     def start_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Start an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -76,7 +114,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         upid = pve.nodes(node).lxc(vmid).status.start.post()
         return _status_response("starting", upid)
 
-    @tool(annotations=LIFECYCLE)
+    @tool(title="Force-stop container", annotations=LIFECYCLE)
     def stop_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Force-stop an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -84,7 +122,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         upid = pve.nodes(node).lxc(vmid).status.stop.post()
         return _status_response("stopping", upid)
 
-    @tool(annotations=LIFECYCLE)
+    @tool(title="Shut down container", annotations=LIFECYCLE)
     def shutdown_container(
         ctx: Context,
         node: NodeArg,
@@ -104,7 +142,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         upid = pve.nodes(node).lxc(vmid).status.shutdown.post(timeout=timeout)
         return _status_response("shutting_down", upid)
 
-    @tool(annotations=LIFECYCLE)
+    @tool(title="Reboot container", annotations=LIFECYCLE)
     def reboot_container(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Reboot an LXC container. Requires PROXMOX_RISK_LEVEL=lifecycle."""
         _tier(ctx, "lifecycle")
@@ -112,7 +150,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         upid = pve.nodes(node).lxc(vmid).status.reboot.post()
         return _status_response("rebooting", upid)
 
-    @tool(annotations=LIFECYCLE)
+    @tool(title="Create container snapshot", annotations=LIFECYCLE)
     def create_container_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -132,7 +170,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
 
     # ── Destructive (PROXMOX_RISK_LEVEL=all) ──
 
-    @tool(annotations=DESTRUCTIVE)
+    @tool(title="Delete container snapshot", annotations=DESTRUCTIVE)
     def delete_container_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -145,7 +183,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         upid = pve.nodes(node).lxc(vmid).snapshot(snapname).delete()
         return _status_response("deleting_snapshot", upid)
 
-    @tool(annotations=DESTRUCTIVE)
+    @tool(title="Roll back container snapshot", annotations=DESTRUCTIVE)
     def rollback_container_snapshot(
         ctx: Context,
         node: NodeArg,

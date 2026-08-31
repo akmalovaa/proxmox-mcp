@@ -20,8 +20,10 @@ jobs:
       - name: Set up Python
         run: uv python install
 
+      # --locked fails if uv.lock is stale against pyproject.toml, which is what
+      # broke tag 1.0.5. Better to catch it on the PR than during a release.
       - name: Sync dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
 
       - name: Ruff
         run: uv run ruff check .
@@ -31,3 +33,60 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -v
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Build only, no push: a broken Dockerfile should fail here rather than
+      # halfway through a tagged release.
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: proxmox-mcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image over stdio
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+
+          proc = subprocess.Popen(
+              ["docker", "run", "-i", "--rm",
+               "-e", "PROXMOX_HOST=192.0.2.1",
+               "-e", "PROXMOX_TOKEN_NAME=t",
+               "-e", "PROXMOX_TOKEN_VALUE=v",
+               "-e", "PROXMOX_RISK_LEVEL=all",
+               "proxmox-mcp:ci"],
+              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+          )
+
+          def send(msg):
+              proc.stdin.write(json.dumps(msg) + "\n")
+              proc.stdin.flush()
+
+          send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                           "clientInfo": {"name": "ci", "version": "1"}}})
+          init = json.loads(proc.stdout.readline())["result"]
+          send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+          send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+          tools = json.loads(proc.stdout.readline())["result"]["tools"]
+          proc.stdin.close()
+          proc.wait(timeout=30)
+
+          print(f"server {init['serverInfo']['name']} {init['serverInfo']['version']}")
+          print(f"tools listed: {len(tools)}")
+          # The image must serve its tool list with no reachable Proxmox behind it.
+          # Exact counts per tier are asserted in tests/test_registration.py.
+          assert init["serverInfo"]["version"], "version metadata missing from the image"
+          assert {"list_nodes", "start_vm", "rollback_vm_snapshot"} <= {t["name"] for t in tools}
+          PY

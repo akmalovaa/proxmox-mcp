@@ -21,7 +21,7 @@
 
 MCP server for managing Proxmox VE
 
-**38 tools** — nodes, QEMU VMs, LXC containers, storage, cluster, snapshots.
+**49 tools** — nodes, QEMU VMs, LXC containers, storage, cluster, snapshots.
 
 ### Why this one?
 
@@ -30,6 +30,7 @@ MCP server for managing Proxmox VE
 - **Read-only by default** — destructive ops are gated behind an explicit `PROXMOX_RISK_LEVEL`
 - **Tiny codebase** — pure stdio MCP over Proxmoxer, no HTTP server, no auth layer, no extras
 - **Raw JSON out** — no formatting, no emoji; LLM gets clean data
+- **Readable failures** — a 403, a dead host or a blocked tier come back as a sentence, not a stack trace
 
 [![proxmox-mcp MCP server](https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp/badges/card.svg)](https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp)
 
@@ -91,7 +92,7 @@ or token auth:
 }
 ```
 
-`docker run -e VAR` without a value passes the host variable through — no secrets in the config file. Restart the client — 38 Proxmox tools become available.
+`docker run -e VAR` without a value passes the host variable through — no secrets in the config file. Restart the client — 31 read-only Proxmox tools become available (more if you raise `PROXMOX_RISK_LEVEL`).
 
 For password auth, swap the token vars for `PROXMOX_PASSWORD`.
 
@@ -133,15 +134,15 @@ export PROXMOX_PASSWORD=your-password
 
 | Level | Tools | Adds |
 |-------|-------|------|
-| `read` *(default)* | 21 | read-only tools |
-| `lifecycle` | 34 | + start / stop / reboot / suspend / clone / create-snapshot |
-| `all` | 38 | + delete-snapshot / rollback-snapshot |
+| `read` *(default)* | 31 | read-only tools |
+| `lifecycle` | 45 | + start / stop / reboot / suspend / clone / migrate / create-snapshot |
+| `all` | 49 | + delete-snapshot / rollback-snapshot |
 
 Each elevated call is also re-checked at call time and logged to stderr (`ALLOW` / `DENY` + tool + tier).
 
 ## Tools
 
-### Nodes (7)
+### Nodes (10)
 
 | Tool | Description |
 |------|-------------|
@@ -149,17 +150,22 @@ Each elevated call is also re-checked at call time and logged to stderr (`ALLOW`
 | `get_node_status` | Detailed node metrics (CPU, memory, disk, load, kernel) |
 | `get_node_networks` | Network interfaces on a node |
 | `get_node_disks` | Physical disks on a node |
-| `get_node_tasks` | Recent tasks on a node |
+| `get_node_services` | Proxmox system services and their state |
+| `get_node_updates` | Pending APT package updates |
+| `get_node_rrd_data` | Historical CPU/memory/disk/network metrics (RRD) |
+| `get_node_tasks` | Recent tasks on a node, optionally errors only |
 | `get_task_status` | Status of a specific task by UPID |
 | `get_task_log` | Log output from a task |
 
-### QEMU VMs (14)
+### QEMU VMs (17)
 
 | Tool | Tier | Description |
 |------|------|-------------|
 | `list_vms` | read | List all VMs, optionally filter by node |
 | `get_vm_status` | read | Current VM status (running/stopped, CPU, memory) |
 | `get_vm_config` | read | VM configuration (hardware, disks, network) |
+| `get_vm_network_interfaces` | read | **IP addresses** of a running VM (via QEMU guest agent) |
+| `get_vm_rrd_data` | read | Historical CPU/memory/disk/network metrics (RRD) |
 | `list_vm_snapshots` | read | List all snapshots of a VM |
 | `start_vm` | lifecycle | Start a VM |
 | `stop_vm` | lifecycle | Force-stop a VM |
@@ -168,17 +174,20 @@ Each elevated call is also re-checked at call time and logged to stderr (`ALLOW`
 | `suspend_vm` | lifecycle | Suspend a VM |
 | `resume_vm` | lifecycle | Resume a suspended VM |
 | `clone_vm` | lifecycle | Full or linked clone |
+| `migrate_vm` | lifecycle | Move a VM to another node, online or offline |
 | `create_vm_snapshot` | lifecycle | Create a snapshot |
 | `delete_vm_snapshot` | all | Delete a snapshot |
 | `rollback_vm_snapshot` | all | Rollback to a snapshot |
 
-### LXC Containers (11)
+### LXC Containers (13)
 
 | Tool | Tier | Description |
 |------|------|-------------|
 | `list_containers` | read | List all LXC containers, optionally filter by node |
 | `get_container_status` | read | Current container status |
 | `get_container_config` | read | Container configuration |
+| `get_container_interfaces` | read | **IP addresses** of a running container |
+| `get_container_rrd_data` | read | Historical CPU/memory/disk/network metrics (RRD) |
 | `list_container_snapshots` | read | List all snapshots |
 | `start_container` | lifecycle | Start a container |
 | `stop_container` | lifecycle | Force-stop a container |
@@ -195,13 +204,16 @@ Each elevated call is also re-checked at call time and logged to stderr (`ALLOW`
 | `list_storage` | Storage pools with usage, optionally filter by node |
 | `get_storage_content` | Contents of a storage pool (ISOs, backups, images, templates) |
 
-### Cluster (4)
+### Cluster (7)
 
 | Tool | Description |
 |------|-------------|
 | `get_cluster_status` | Cluster health, quorum, node membership |
 | `get_cluster_resources` | All resources (VMs, containers, storage, nodes) |
 | `get_cluster_backups` | Configured backup jobs |
+| `get_ha_status` | High-availability resources and their state |
+| `list_pools` | Resource pools |
+| `get_cluster_log` | Cluster-wide event log, newest first |
 | `get_next_vmid` | Next available VM/container ID |
 
 ## Architecture
@@ -215,8 +227,11 @@ src/proxmox_mcp/
 ```
 
 - **Read-only by default** — elevated tools gated by `PROXMOX_RISK_LEVEL`
-- **Single connection** — Proxmoxer client created once at startup, shared via lifespan
-- **Raw JSON output** — no formatting; LLM consumes data directly
+- **Lazy connection** — the Proxmoxer client is built on first use, once, and shared;
+  the server therefore starts cleanly even when Proxmox is unreachable
+- **Raw JSON output** — compact, no formatting; LLM consumes data directly
+- **Normalized errors** — Proxmox and network failures are translated into one
+  actionable sentence instead of a `requests` traceback
 
 ## Development
 
@@ -264,6 +279,19 @@ MCP client config:
 git clone https://github.com/akmalovaa/proxmox-mcp.git
 cd proxmox-mcp
 docker build -t proxmox-mcp .
+```
+
+The image is multi-stage: `uv` builds the virtualenv in a throwaway layer, and the
+runtime stage carries only Python plus the venv and runs as the unprivileged `mcp`
+user (uid 10001).
+
+### Lint, type-check, test
+
+```bash
+uv sync --locked --group dev
+uv run ruff check .
+uv run mypy src/
+uv run pytest -v
 ```
 
 ## License

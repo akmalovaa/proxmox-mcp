@@ -1,0 +1,123 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.akmalovaa/proxmox-mcp",
+  "title": "Proxmox VE",
+  "description": "Manage Proxmox VE nodes, VMs, containers, storage and snapshots. Read-only by default.",
+  "version": "2.1.0",
+  "websiteUrl": "https://github.com/akmalovaa/proxmox-mcp",
+  "repository": {
+    "url": "https://github.com/akmalovaa/proxmox-mcp",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://github.com/akmalovaa/proxmox-mcp/raw/main/docs/logo_512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "proxmox-ve-mcp",
+      "version": "2.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "PROXMOX_HOST",
+          "description": "Proxmox host IP or hostname.",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_USER",
+          "description": "API user, including the realm.",
+          "default": "root@pam",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_NAME",
+          "description": "API token name. Use this plus PROXMOX_TOKEN_VALUE, or PROXMOX_PASSWORD.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_VALUE",
+          "description": "API token secret.",
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_PASSWORD",
+          "description": "Password, used only when no API token is set.",
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_PORT",
+          "description": "Proxmox API port.",
+          "default": "8006",
+          "format": "number"
+        },
+        {
+          "name": "PROXMOX_VERIFY_SSL",
+          "description": "Verify the TLS certificate. Proxmox self-signs by default.",
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_RISK_LEVEL",
+          "description": "Which tools exist: read-only, plus lifecycle, or everything.",
+          "default": "read",
+          "choices": ["read", "lifecycle", "all"],
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "registryBaseUrl": "https://ghcr.io",
+      "identifier": "ghcr.io/akmalovaa/proxmox-mcp:2.1.0",
+      "version": "2.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "PROXMOX_HOST",
+          "description": "Proxmox host IP or hostname.",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_USER",
+          "description": "API user, including the realm.",
+          "default": "root@pam",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_NAME",
+          "description": "API token name. Use this plus PROXMOX_TOKEN_VALUE, or PROXMOX_PASSWORD.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_VALUE",
+          "description": "API token secret.",
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_PASSWORD",
+          "description": "Password, used only when no API token is set.",
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_RISK_LEVEL",
+          "description": "Which tools exist: read-only, plus lifecycle, or everything.",
+          "default": "read",
+          "choices": ["read", "lifecycle", "all"],
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

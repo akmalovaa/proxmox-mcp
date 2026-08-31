@@ -1,8 +1,13 @@
-.git
-__pycache__
-*.pyc
-.env
-.venv
-CLAUDE.md
-README.md
-task.md
+# Keep the build context small: everything the image needs is listed in the
+# Dockerfile's COPY lines. README.md and LICENSE stay — the wheel build reads them.
+*
+
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src/
+
+# Re-exclude build noise that lives inside the included tree.
+src/**/__pycache__
+src/**/*.pyc

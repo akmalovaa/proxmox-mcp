@@ -1,17 +1,23 @@
-import json
-from typing import Annotated
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import Field
 
 from proxmox_mcp.config import RiskLevel
-from proxmox_mcp.tools._common import READ_ONLY, _ctx, make_gate
+from proxmox_mcp.tools._common import (
+    READ_ONLY,
+    RrdCf,
+    Timeframe,
+    _ctx,
+    _json,
+    make_gate,
+)
 
 
 def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
     tool = make_gate(mcp, risk_level)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="List nodes", annotations=READ_ONLY)
     def list_nodes(ctx: Context) -> str:
         """List all nodes in the Proxmox cluster with status, CPU, memory, and uptime."""
         pve = _ctx(ctx).proxmox
@@ -25,9 +31,9 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
             if "cpu" in node:
                 enriched["cpu_usage_pct"] = round(node["cpu"] * 100, 1)
             result.append(enriched)
-        return json.dumps(result, indent=2)
+        return _json(result)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Node status", annotations=READ_ONLY)
     def get_node_status(
         ctx: Context,
         node: Annotated[str, Field(description="Node name (e.g. 'pve', 'node1').")],
@@ -35,9 +41,9 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         """Get detailed status of a node: CPU, memory, disk, load average, kernel version."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).status.get()
-        return json.dumps(status, indent=2)
+        return _json(status)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Node networks", annotations=READ_ONLY)
     def get_node_networks(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -45,9 +51,9 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         """List network interfaces on a node."""
         pve = _ctx(ctx).proxmox
         networks = pve.nodes(node).network.get()
-        return json.dumps(networks, indent=2)
+        return _json(networks)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Node disks", annotations=READ_ONLY)
     def get_node_disks(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -55,22 +61,85 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         """List physical disks on a node."""
         pve = _ctx(ctx).proxmox
         disks = pve.nodes(node).disks.list.get()
-        return json.dumps(disks, indent=2)
+        return _json(disks)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Node services", annotations=READ_ONLY)
+    def get_node_services(
+        ctx: Context,
+        node: Annotated[str, Field(description="Node name.")],
+    ) -> str:
+        """List Proxmox system services on a node with their running state.
+
+        Covers pveproxy, pvedaemon, pve-cluster, pvestatd, corosync and friends —
+        use it when the node is up but the cluster or web UI misbehaves.
+        """
+        pve = _ctx(ctx).proxmox
+        services = pve.nodes(node).services.get()
+        return _json(services)
+
+    @tool(title="Node updates", annotations=READ_ONLY)
+    def get_node_updates(
+        ctx: Context,
+        node: Annotated[str, Field(description="Node name.")],
+    ) -> str:
+        """List pending APT package updates on a node.
+
+        Reads the cached package index; it does not run `apt update`, so results are
+        as fresh as the node's last refresh.
+        """
+        pve = _ctx(ctx).proxmox
+        updates = pve.nodes(node).apt.update.get()
+        return _json(updates)
+
+    @tool(title="Node metrics history", annotations=READ_ONLY)
+    def get_node_rrd_data(
+        ctx: Context,
+        node: Annotated[str, Field(description="Node name.")],
+        timeframe: Annotated[
+            Timeframe,
+            Field(description="Window of history to return, counting back from now."),
+        ] = "day",
+        cf: Annotated[
+            RrdCf,
+            Field(
+                description=(
+                    "How each sample bucket is condensed: 'AVERAGE' for typical load, "
+                    "'MAX' to catch spikes that averaging hides."
+                )
+            ),
+        ] = "AVERAGE",
+    ) -> str:
+        """Get historical CPU, memory, disk and network metrics for a node (RRD series).
+
+        Use this for questions about the past — "was it swapping last night", "when did
+        load spike" — which get_node_status cannot answer, as it only reports right now.
+        """
+        pve = _ctx(ctx).proxmox
+        data = pve.nodes(node).rrddata.get(timeframe=timeframe, cf=cf)
+        return _json(data)
+
+    @tool(title="Node tasks", annotations=READ_ONLY)
     def get_node_tasks(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
         limit: Annotated[
             int, Field(description="Maximum number of tasks to return.", ge=1, le=500)
         ] = 20,
+        errors_only: Annotated[
+            bool,
+            Field(description="Return only tasks that ended in an error."),
+        ] = False,
     ) -> str:
-        """List recent tasks on a node."""
+        """List recent tasks on a node, newest first, optionally only failed ones."""
         pve = _ctx(ctx).proxmox
-        tasks = pve.nodes(node).tasks.get(limit=limit)
-        return json.dumps(tasks, indent=2)
+        params: dict[str, Any] = {"limit": limit}
+        if errors_only:
+            # Proxmox expects 0/1 for boolean query params, not true/false.
+            params["errors"] = 1
+        tasks = pve.nodes(node).tasks.get(**params)
+        return _json(tasks)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Task status", annotations=READ_ONLY)
     def get_task_status(
         ctx: Context,
         node: Annotated[str, Field(description="Node name where the task runs.")],
@@ -82,9 +151,9 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         """Get status of a specific task by its UPID."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).tasks(upid).status.get()
-        return json.dumps(status, indent=2)
+        return _json(status)
 
-    @tool(annotations=READ_ONLY)
+    @tool(title="Task log", annotations=READ_ONLY)
     def get_task_log(
         ctx: Context,
         node: Annotated[str, Field(description="Node name where the task runs.")],
@@ -96,4 +165,4 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         """Get log output from a specific task."""
         pve = _ctx(ctx).proxmox
         log = pve.nodes(node).tasks(upid).log.get(limit=limit)
-        return json.dumps(log, indent=2)
+        return _json(log)

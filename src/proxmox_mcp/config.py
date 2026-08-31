@@ -37,8 +37,8 @@ class Settings(BaseSettings):
 
     # Risk tier for elevated operations:
     #   read      — only read-only tools
-    #   lifecycle — + start/stop/reboot/snapshot-create/clone
-    #   all       — + delete/rollback/exec
+    #   lifecycle — + start/stop/reboot/clone/migrate/snapshot-create
+    #   all       — + snapshot delete/rollback
     risk_level: RiskLevel = "read"
 
     def get_proxmoxer_kwargs(self) -> dict[str, Any]:
