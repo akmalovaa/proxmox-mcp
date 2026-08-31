@@ -208,7 +208,7 @@ Each elevated call is also re-checked at call time and logged to stderr (`ALLOW`
 
 ```
 src/proxmox_mcp/
-├── server.py    # FastMCP instance + entry point
+├── server.py    # MCPServer instance + entry point
 ├── config.py    # Pydantic Settings (PROXMOX_ prefix)
 ├── client.py    # Proxmoxer connection via lifespan
 └── tools/       # nodes, vms, containers, storage, cluster

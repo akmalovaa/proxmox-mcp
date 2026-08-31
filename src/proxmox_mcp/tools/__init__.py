@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from proxmox_mcp.config import RiskLevel
 from proxmox_mcp.tools.cluster import register as register_cluster
@@ -8,7 +8,7 @@ from proxmox_mcp.tools.storage import register as register_storage
 from proxmox_mcp.tools.vms import register as register_vms
 
 
-def register_all(mcp: FastMCP, risk_level: RiskLevel) -> None:
+def register_all(mcp: MCPServer, risk_level: RiskLevel) -> None:
     register_nodes(mcp, risk_level)
     register_vms(mcp, risk_level)
     register_containers(mcp, risk_level)

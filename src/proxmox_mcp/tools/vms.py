@@ -1,7 +1,7 @@
 import json
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from pydantic import Field
 
 from proxmox_mcp.config import RiskLevel
@@ -20,7 +20,7 @@ VmidArg = Annotated[int, Field(description="QEMU VM numeric ID.", ge=100, le=999
 SnapnameArg = Annotated[str, Field(description="Snapshot name.")]
 
 
-def register(mcp: FastMCP, risk_level: RiskLevel) -> None:
+def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
     tool = make_gate(mcp, risk_level)
 
     # ── Read-only ──

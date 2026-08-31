@@ -1,7 +1,9 @@
 import logging
 import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from proxmox_mcp.client import lifespan
 from proxmox_mcp.config import get_risk_level
@@ -13,7 +15,14 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-mcp = FastMCP("proxmox-mcp", lifespan=lifespan)
+try:
+    __version__ = pkg_version("proxmox-ve-mcp")
+except PackageNotFoundError:
+    # Source checkout / the Docker image, which runs from PYTHONPATH=/app/src
+    # without installing the project. Same blank version MCPServer defaults to.
+    __version__ = ""
+
+mcp = MCPServer("proxmox-mcp", version=__version__, lifespan=lifespan)
 register_all(mcp, get_risk_level())
 
 

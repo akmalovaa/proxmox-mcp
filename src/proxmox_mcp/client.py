@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from proxmoxer import ProxmoxAPI
 
 from proxmox_mcp.config import Settings
@@ -20,5 +20,5 @@ class AppContext:
 
 
 @asynccontextmanager
-async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+async def lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
     yield AppContext(Settings())  # type: ignore[call-arg]

@@ -2,9 +2,9 @@ import inspect
 import json
 import logging
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 
 from proxmox_mcp.client import AppContext
@@ -17,23 +17,23 @@ _TIER_ORDER = {"read": 0, "lifecycle": 1, "all": 2}
 logger = logging.getLogger("proxmox_mcp.policy")
 
 # MCP tool annotations (hints for clients).
-# openWorldHint=True for all — every tool talks to the external Proxmox API.
+# open_world_hint=True for all — every tool talks to the external Proxmox API.
 READ_ONLY = ToolAnnotations(
-    readOnlyHint=True,
-    idempotentHint=True,
-    openWorldHint=True,
+    read_only_hint=True,
+    idempotent_hint=True,
+    open_world_hint=True,
 )
 LIFECYCLE = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=False,
-    openWorldHint=True,
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=True,
 )
 DESTRUCTIVE = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=True,
-    idempotentHint=False,
-    openWorldHint=True,
+    read_only_hint=False,
+    destructive_hint=True,
+    idempotent_hint=False,
+    open_world_hint=True,
 )
 
 
@@ -47,7 +47,7 @@ def _required_tier(annotations: ToolAnnotations | None) -> str:
 
 
 def make_gate(
-    mcp: FastMCP, risk_level: RiskLevel
+    mcp: MCPServer, risk_level: RiskLevel
 ) -> Callable[..., Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """Return a drop-in ``@tool(...)`` decorator that gates registration by tier.
 
@@ -70,7 +70,7 @@ def make_gate(
 
 
 def _ctx(ctx: Context) -> AppContext:
-    return ctx.request_context.lifespan_context
+    return cast(AppContext, ctx.request_context.lifespan_context)
 
 
 def _tier(ctx: Context, required: Tier) -> None:

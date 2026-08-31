@@ -13,7 +13,7 @@
 ## Tech Stack
 
 - **Python 3.14** with **UV** package manager
-- **FastMCP** (mcp SDK) — MCP server framework
+- **MCP Python SDK 2.x** (`mcp.server.mcpserver.MCPServer`) — MCP server framework
 - **Proxmoxer** — Proxmox REST API client
 - **Pydantic Settings** — configuration from environment variables
 
@@ -31,7 +31,7 @@
 src/proxmox_mcp/
 ├── __init__.py
 ├── __main__.py                         # `uv run python -m proxmox_mcp`
-├── server.py                           # FastMCP instance, tool registration, entry point
+├── server.py                           # MCPServer instance, tool registration, entry point
 ├── config.py                           # Settings class (env vars with PROXMOX_ prefix)
 ├── client.py                           # AppContext (lazy ProxmoxAPI property), lifespan
 └── tools/
@@ -106,22 +106,22 @@ All via environment variables (prefix `PROXMOX_`):
 ## Adding New Tools
 
 1. Create or edit a file in `src/proxmox_mcp/tools/`.
-2. Add a `register(mcp: FastMCP, risk_level: RiskLevel)` function; build `tool = make_gate(mcp, risk_level)` and decorate handlers with `@tool()` (not `@mcp.tool()`) so they are gated by tier.
+2. Add a `register(mcp: MCPServer, risk_level: RiskLevel)` function; build `tool = make_gate(mcp, risk_level)` and decorate handlers with `@tool()` (not `@mcp.tool()`) so they are gated by tier.
 3. Each tool gets `ctx: Context` as first param; use `_ctx(ctx).proxmox` for the API client.
 4. For elevated operations, call `_tier(ctx, "lifecycle")` or `_tier(ctx, "all")` at the start (call-time guard on top of the registration gate).
 5. Register the module in `tools/__init__.py` (pass `risk_level` through).
 
 ### Tool quality patterns
 
-- **Descriptions** — every `@mcp.tool()` has a one-line docstring (extra details after a blank line). FastMCP does **not** parse Google-style `Args:` sections — keep the docstring focused on the tool's purpose, not parameters.
-- **Parameter descriptions** — every parameter uses `Annotated[T, Field(description="...")]` from `pydantic`. This is the only way descriptions land in `inputSchema.properties[*].description`.
-- **Annotations** — every tool passes `annotations=READ_ONLY | LIFECYCLE | DESTRUCTIVE` (constants in `tools/_common.py`). All three set `openWorldHint=True` because every tool calls the external Proxmox API. The annotation also drives registration gating (see "Registration gating"), so picking the right one is what places a tool in the correct tier.
+- **Descriptions** — every `@mcp.tool()` has a one-line docstring (extra details after a blank line). The SDK does **not** parse Google-style `Args:` sections — keep the docstring focused on the tool's purpose, not parameters.
+- **Parameter descriptions** — every parameter uses `Annotated[T, Field(description="...")]` from `pydantic`. This is the only way descriptions land in `input_schema.properties[*].description`.
+- **Annotations** — every tool passes `annotations=READ_ONLY | LIFECYCLE | DESTRUCTIVE` (constants in `tools/_common.py`). All three set `open_world_hint=True` (serialized as `openWorldHint` on the wire) because every tool calls the external Proxmox API. The annotation also drives registration gating (see "Registration gating"), so picking the right one is what places a tool in the correct tier.
   - `READ_ONLY` — all GETs (`list_*`, `get_*`)
   - `LIFECYCLE` — start/stop/reboot/shutdown/suspend/resume/clone/create-snapshot
   - `DESTRUCTIVE` — delete/rollback (data loss possible)
 - **Naming** — snake_case `verb_noun` (`list_vms`, `get_vm_status`, `start_container`, `delete_container_snapshot`).
 
-Validation snippet (run after edits) — confirms descriptions land in `inputSchema` and annotations are attached:
+Validation snippet (run after edits) — confirms descriptions land in `input_schema` and annotations are attached:
 
 ```bash
 # PROXMOX_RISK_LEVEL=all exposes every tool so the snippet validates all 38.
@@ -131,8 +131,8 @@ os.environ.update(PROXMOX_HOST='x', PROXMOX_TOKEN_NAME='x', PROXMOX_TOKEN_VALUE=
 from proxmox_mcp.server import mcp
 async def m():
     tools = await mcp.list_tools()
-    p = sum(1 for t in tools for x in t.inputSchema.get('properties', {}).values() if x.get('description'))
-    n = sum(len(t.inputSchema.get('properties', {})) for t in tools)
+    p = sum(1 for t in tools for x in t.input_schema.get('properties', {}).values() if x.get('description'))
+    n = sum(len(t.input_schema.get('properties', {})) for t in tools)
     a = sum(1 for t in tools if t.annotations)
     print(f'tools: {len(tools)}, params w/ desc: {p}/{n}, annotated: {a}/{len(tools)}')
 asyncio.run(m())

@@ -1,7 +1,7 @@
 import asyncio
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from proxmox_mcp.config import RiskLevel
 from proxmox_mcp.tools import register_all
@@ -40,7 +40,7 @@ DESTRUCTIVE_TOOLS = {
 
 
 def _registered_tool_names(risk_level: RiskLevel) -> set[str]:
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register_all(mcp, risk_level)
     tools = asyncio.run(mcp.list_tools())
     return {t.name for t in tools}
