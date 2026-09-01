@@ -114,6 +114,12 @@
           "default": "read",
           "choices": ["read", "lifecycle", "all"],
           "format": "string"
+        },
+        {
+          "name": "SENTRY_DSN",
+          "description": "Optional: report tool traces and errors to Sentry. Unset disables it.",
+          "isSecret": true,
+          "format": "string"
         }
       ]
     }

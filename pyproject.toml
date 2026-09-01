@@ -27,6 +27,11 @@ dependencies = [
     "pydantic-settings>=2.9",
 ]
 
+[project.optional-dependencies]
+# Opt-in telemetry. 2.68 is the first release whose MCP integration speaks the
+# mcp 2.x server API; older ones only patch the 1.x lowlevel Server.
+sentry = ["sentry-sdk>=2.68"]
+
 [project.urls]
 Homepage = "https://github.com/akmalovaa/proxmox-mcp"
 Repository = "https://github.com/akmalovaa/proxmox-mcp"
@@ -48,6 +53,8 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.7",
     "mypy>=1.13",
+    # The extra, so CI exercises the Sentry path instead of skipping it.
+    "sentry-sdk>=2.68",
 ]
 
 [tool.ruff]

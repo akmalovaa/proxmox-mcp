@@ -9,7 +9,7 @@
 - **GHCR image**: `ghcr.io/akmalovaa/proxmox-mcp:latest` (multi-arch `amd64` + `arm64`). Preferred install path.
 - **PyPI**: https://pypi.org/project/proxmox-ve-mcp/ — distribution name is `proxmox-ve-mcp` (the `proxmox-mcp` slot was already taken). Run via `uvx proxmox-ve-mcp`. The Python module is still imported as `proxmox_mcp` — `[tool.uv.build-backend] module-name` in `pyproject.toml` reconciles the two names.
 - **Glama**: https://glama.ai/mcp/servers/akmalovaa/proxmox-mcp — builds the Dockerfile from main branch on Deploy.
-- **MCP Registry**: `server.json` declares the pypi + oci packages under the name `io.github.akmalovaa/proxmox-mcp`, which is what the `<!-- mcp-name: ... -->` marker at the top of README.md validates ownership for. Publishing is manual — see "Release flow".
+- **MCP Registry**: published as `io.github.akmalovaa/proxmox-mcp` (check with `curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.akmalovaa/proxmox-mcp"`). `server.json` declares both the pypi and oci packages; publishing is manual — see "Release flow".
 
 ## Tech Stack
 
@@ -21,7 +21,7 @@
 ## Project Structure
 
 ```
-├── Dockerfile                          # Multi-stage: uv builds the venv, runtime runs as uid 10001
+├── Dockerfile                          # Multi-stage: uv builds the venv (--extra sentry), runs as uid 10001
 ├── compose.yaml                        # Dev-only: builds local image with build: .
 ├── .dockerignore                       # Deny-all + allowlist; keeps docs/ out of the context
 ├── .env.example                        # Template for local dev env vars
@@ -38,6 +38,7 @@ src/proxmox_mcp/
 ├── server.py                           # MCPServer instance (+ instructions/icons), registration, entry point
 ├── config.py                           # Settings class (env vars with PROXMOX_ prefix)
 ├── client.py                           # AppContext (lazy, lock-guarded ProxmoxAPI), lifespan
+├── telemetry.py                        # setup_sentry() — optional, inert without SENTRY_DSN
 └── tools/
     ├── __init__.py                     # register_all() — imports and registers all tool modules
     ├── _common.py                      # gate, error normalization, _ctx/_tier/_json, annotations
@@ -60,6 +61,7 @@ src/proxmox_mcp/
 - **Context access**: `_ctx(ctx)` extracts `AppContext` from MCP context; `_tier(ctx, "lifecycle"|"all")` guards elevated ops at call time (defense in depth on top of registration gating) and logs ALLOW/DENY to stderr.
 - **Return format**: all tools return `_json(data)` from `_common.py` — compact `json.dumps` with `separators=(",", ":")`, no emoji, raw JSON for LLM. Indentation is pure token cost on large responses like `get_cluster_resources`.
 - **Error normalization**: `make_gate` wraps every registered tool in `_wrap_errors`, which re-raises whatever the body throws as an `mcp.server.mcpserver.exceptions.ToolError` carrying a sentence from `_describe()`. This is not cosmetic: the SDK forwards the message of a `ToolError` but replaces anything else with a bare `Error executing tool <name>`, so without the wrapper a 403, an unreachable host, and even the `_tier` denial all reach the model as no information at all. Covered by `tests/test_errors.py`.
+- **Optional Sentry**: `telemetry.py:setup_sentry(version)` starts `sentry_sdk` with `MCPIntegration` only when `SENTRY_DSN` is set — otherwise `sentry_sdk` is never imported. It is called in `server.py` **before** `mcp = MCPServer(...)`, and that order is load-bearing: the integration instruments servers by patching `mcp.server.lowlevel.Server.__init__` from inside `sentry_sdk.init()`, so a server built earlier gets no middleware and reports nothing. `tests/test_telemetry.py` pins the ordering. Errors need a second hook: the SDK catches a tool's exception inside `mcpserver/server.py:_handle_call_tool` and returns an `isError` result *below* the Sentry middleware, so `_wrap_errors` calls `telemetry.report_exception` (a `sys.modules` lookup, so it costs nothing when Sentry is off) — tier denials are skipped, they are policy, not faults. The SDK is an optional extra (`proxmox-ve-mcp[sentry]`, in the Docker image, and in the dev group so CI covers it); a DSN without the package logs a warning and the server runs on. `SENTRY_SEND_DEFAULT_PII` defaults to false because span data would then carry tool arguments and results — `get_vm_config` returns ssh keys and cipassword hashes.
 - **Server metadata**: `server.py` passes `instructions=` (discovery order, QEMU vs LXC namespaces, UPID polling, what the risk tiers do), plus `title`, `website_url` and `icons`. The instructions are the cheapest place to prevent guessed node names and VMIDs.
 
 ## Commands
@@ -67,6 +69,7 @@ src/proxmox_mcp/
 ```bash
 # Local dev
 uv sync                          # Install dependencies
+uv sync --extra sentry           # + sentry-sdk (optional telemetry)
 uv run python -m proxmox_mcp     # Run server (stdio mode)
 uv run proxmox-ve-mcp            # Same thing via the script entry-point
 
@@ -109,6 +112,16 @@ All via environment variables (prefix `PROXMOX_`):
 | `PROXMOX_RISK_LEVEL` | no | read | `read`/`lifecycle`/`all` — see "Three-tier access" |
 
 *Either token (name+value) or password is required.
+
+Optional Sentry reporting (standard `SENTRY_*` names, read by `telemetry.py` and by sentry-sdk itself):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SENTRY_DSN` | — | Unset = no telemetry, SDK not imported |
+| `SENTRY_ENVIRONMENT` | `production` | Environment label |
+| `SENTRY_TRACES_SAMPLE_RATE` | `1.0` | Share of tool calls traced; unparsable value warns and falls back |
+| `SENTRY_SEND_DEFAULT_PII` | `false` | Tool arguments/results as span data — leaks guest config |
+| `SENTRY_RELEASE` | `proxmox-ve-mcp@<version>` | Overrides the release tag |
 
 ## Adding New Tools
 
@@ -162,9 +175,15 @@ asyncio.run(m())
 
 ## Release flow
 
-1. Bump `version` in `pyproject.toml` **and** the three `version` fields in `server.json` (server + both packages, including the `:X.Y.Z` tag in the oci identifier).
+1. Bump `version` in `pyproject.toml` **and** in `server.json` — two `version` fields there (top level + the pypi package) plus the `:X.Y.Z` tag in the oci `identifier`. The oci package carries **no** `version` field of its own; see step 6.
 2. `uv lock` to refresh the lockfile (skipping this is what blew up tag 1.0.5; CI's `--locked` now catches it).
 3. Commit + push to `main`.
 4. `uv build && uv publish dist/proxmox_ve_mcp-X.Y.Z*` — pushes the wheel to PyPI. Token is read from `~/.pypirc` (set `UV_PUBLISH_TOKEN` env var from there since `uv publish` does not read pypirc directly).
 5. `git tag X.Y.Z && git push --tags` — `docker-publish.yml` builds and pushes `:X.Y.Z`, `:X.Y`, `:sha-<short>` and moves `:latest` to the new release.
-6. *(optional)* Publish to the MCP Registry with `mcp-publisher login github && mcp-publisher publish`, run locally from the repo root. It validates `server.json` against the `<!-- mcp-name: ... -->` marker in README.md. Deliberately not automated — publishing stays a manual, local step, same as PyPI.
+6. *(optional)* Publish to the MCP Registry: `mcp-publisher login github` (interactive device flow), then `mcp-publisher publish` from the repo root. Deliberately not automated — publishing stays a manual, local step, same as PyPI.
+
+   **Run it last.** The registry fetches both artifacts to verify ownership, so PyPI `X.Y.Z` and GHCR `:X.Y.Z` must already exist:
+   - **pypi** — verified by the `<!-- mcp-name: io.github.akmalovaa/proxmox-mcp -->` marker on line 1 of README.md, which becomes the PyPI description. Keep it there.
+   - **oci** — verified by `LABEL io.modelcontextprotocol.server.name` in the Dockerfile, which must equal `name` in `server.json`.
+
+   Two rules cost a rejected publish on 2.1.1 and are **not in the JSON schema**, so `mcp-publisher validate` passes anyway and only the server rejects them: an oci package must have neither `registryBaseUrl` nor `version` — both live inside `identifier` (`ghcr.io/owner/image:X.Y.Z`). The pypi package keeps both fields.

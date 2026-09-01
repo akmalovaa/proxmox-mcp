@@ -13,6 +13,7 @@ from proxmoxer.core import AuthenticationError, ResourceException
 
 from proxmox_mcp.client import AppContext
 from proxmox_mcp.config import RiskLevel
+from proxmox_mcp.telemetry import report_exception
 
 Tier = Literal["lifecycle", "all"]
 
@@ -147,6 +148,9 @@ def _wrap_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
         except ToolError:
             raise
         except Exception as exc:
+            # A tier denial is the policy working as intended, not a fault to report.
+            if not isinstance(exc, PermissionError):
+                report_exception(exc)
             raise ToolError(_describe(exc, _endpoint(kwargs))) from exc
 
     return wrapper

@@ -140,6 +140,29 @@ export PROXMOX_PASSWORD=your-password
 
 Each elevated call is also re-checked at call time and logged to stderr (`ALLOW` / `DENY` + tool + tier).
 
+### Sentry (optional)
+
+Tool calls and failures can be shipped to [Sentry](https://sentry.io) — every `tools/call`
+becomes a span, every failing tool an issue. Nothing is sent, and the SDK is never even
+imported, while `SENTRY_DSN` is unset.
+
+The `ghcr.io` image already contains the SDK. From PyPI, install the extra:
+
+```bash
+uvx --from 'proxmox-ve-mcp[sentry]' proxmox-ve-mcp
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SENTRY_DSN` | — | Set it to enable reporting |
+| `SENTRY_ENVIRONMENT` | `production` | Free-form environment label |
+| `SENTRY_TRACES_SAMPLE_RATE` | `1.0` | Share of tool calls traced |
+| `SENTRY_SEND_DEFAULT_PII` | `false` | Send tool arguments and results as span data |
+
+Leave `SENTRY_SEND_DEFAULT_PII` off unless you mean it: with it on, tool arguments and
+results are attached to spans, and `get_vm_config` returns ssh keys and `cipassword`
+hashes. A DSN set without the extra installed logs a warning and the server runs on.
+
 ## Tools
 
 ### Nodes (10)

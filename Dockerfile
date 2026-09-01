@@ -12,13 +12,13 @@ WORKDIR /app
 
 # Dependencies first — this layer is reused until the lockfile changes.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --extra sentry --no-install-project
 
 # Then the project itself, so importlib.metadata can report a real version
 # over MCP instead of the empty-string fallback.
 COPY README.md LICENSE ./
 COPY src/ src/
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-dev --extra sentry --no-editable
 
 
 FROM python:3.14-slim

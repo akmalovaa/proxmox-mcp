@@ -8,6 +8,7 @@ from mcp.types import Icon
 
 from proxmox_mcp.client import lifespan
 from proxmox_mcp.config import get_risk_level
+from proxmox_mcp.telemetry import setup_sentry
 from proxmox_mcp.tools import register_all
 
 logging.basicConfig(
@@ -46,6 +47,10 @@ try:
 except PackageNotFoundError:
     # Source checkout without an install. Same blank version MCPServer defaults to.
     __version__ = ""
+
+# Before MCPServer(...), not after: the Sentry integration instruments servers by
+# patching Server.__init__, so anything built ahead of sentry_sdk.init() is silent.
+setup_sentry(__version__)
 
 mcp = MCPServer(
     "proxmox-mcp",
