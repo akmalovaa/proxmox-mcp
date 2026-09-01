@@ -23,6 +23,10 @@ RUN uv sync --frozen --no-dev --no-editable
 
 FROM python:3.14-slim
 
+# How the MCP Registry verifies this image belongs to the server declared in
+# server.json — the value must match its "name" field exactly.
+LABEL io.modelcontextprotocol.server.name="io.github.akmalovaa/proxmox-mcp"
+
 # stdio transport needs no ports and no writable state, so drop root.
 RUN useradd --create-home --uid 10001 mcp
 
