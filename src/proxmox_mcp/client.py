@@ -26,6 +26,25 @@ class AppContext:
         return self._proxmox
 
 
+_context: AppContext | None = None
+_context_lock = threading.Lock()
+
+
+def get_app_context() -> AppContext:
+    """The one ``AppContext`` for this process, built on first use.
+
+    Shared rather than per-lifespan so the ``/readyz`` route reuses the same
+    connection the tools use — in stateless HTTP mode there is no request whose
+    lifespan context a health check could borrow.
+    """
+    global _context
+    if _context is None:
+        with _context_lock:
+            if _context is None:
+                _context = AppContext(Settings())  # type: ignore[call-arg]
+    return _context
+
+
 @asynccontextmanager
 async def lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
-    yield AppContext(Settings())  # type: ignore[call-arg]
+    yield get_app_context()

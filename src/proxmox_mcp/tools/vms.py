@@ -3,17 +3,19 @@ from typing import Annotated, Any
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import Field
 
-from proxmox_mcp.config import RiskLevel
 from proxmox_mcp.tools._common import (
     DESTRUCTIVE,
+    GUEST_FIELDS,
     LIFECYCLE,
     READ_ONLY,
+    Policy,
     RrdCf,
     Timeframe,
+    VerboseArg,
+    _accepted,
+    _compact,
     _ctx,
     _json,
-    _status_response,
-    _tier,
     make_gate,
 )
 
@@ -22,18 +24,19 @@ VmidArg = Annotated[int, Field(description="QEMU VM numeric ID.", ge=100, le=999
 SnapnameArg = Annotated[str, Field(description="Snapshot name.")]
 
 
-def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
-    tool = make_gate(mcp, risk_level)
+def register(mcp: MCPServer, policy: Policy) -> None:
+    tool = make_gate(mcp, policy)
 
     # ── Read-only ──
 
-    @tool(title="List VMs", annotations=READ_ONLY)
+    @tool(tier="read", title="List VMs", annotations=READ_ONLY)
     def list_vms(
         ctx: Context,
         node: Annotated[
             str | None,
             Field(description="Optional node name. If omitted, lists VMs across the cluster."),
         ] = None,
+        verbose: VerboseArg = False,
     ) -> str:
         """List all QEMU VMs in the cluster, optionally filtered by node."""
         pve = _ctx(ctx).proxmox
@@ -43,23 +46,23 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         else:
             resources = pve.cluster.resources.get(type="vm")
             vms = [r for r in resources if r.get("type") == "qemu"]
-        return _json(vms)
+        return _json(vms if verbose else _compact(vms, GUEST_FIELDS))
 
-    @tool(title="VM status", annotations=READ_ONLY)
+    @tool(tier="read", title="VM status", annotations=READ_ONLY)
     def get_vm_status(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get current runtime status of a VM (running/stopped, CPU, memory, uptime)."""
         pve = _ctx(ctx).proxmox
         status = pve.nodes(node).qemu(vmid).status.current.get()
         return _json(status)
 
-    @tool(title="VM config", annotations=READ_ONLY)
+    @tool(tier="read", title="VM config", annotations=READ_ONLY)
     def get_vm_config(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get VM configuration: hardware, boot order, disks, network, cloud-init, etc."""
         pve = _ctx(ctx).proxmox
         config = pve.nodes(node).qemu(vmid).config.get()
         return _json(config)
 
-    @tool(title="VM IP addresses", annotations=READ_ONLY)
+    @tool(tier="read", title="VM IP addresses", annotations=READ_ONLY)
     def get_vm_network_interfaces(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Get a running VM's network interfaces and IP addresses via the QEMU guest agent.
 
@@ -72,7 +75,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         interfaces = pve.nodes(node).qemu(vmid).agent("network-get-interfaces").get()
         return _json(interfaces)
 
-    @tool(title="VM metrics history", annotations=READ_ONLY)
+    @tool(tier="read", title="VM metrics history", annotations=READ_ONLY)
     def get_vm_rrd_data(
         ctx: Context,
         node: NodeArg,
@@ -96,7 +99,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         data = pve.nodes(node).qemu(vmid).rrddata.get(timeframe=timeframe, cf=cf)
         return _json(data)
 
-    @tool(title="List VM snapshots", annotations=READ_ONLY)
+    @tool(tier="read", title="List VM snapshots", annotations=READ_ONLY)
     def list_vm_snapshots(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """List all snapshots of a VM."""
         pve = _ctx(ctx).proxmox
@@ -105,23 +108,21 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
 
     # ── Lifecycle (PROXMOX_RISK_LEVEL=lifecycle) ──
 
-    @tool(title="Start VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Start VM", annotations=LIFECYCLE)
     def start_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Start a VM. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.start.post()
-        return _status_response("starting", upid)
+        return _accepted("start_vm", node, upid, vmid=vmid)
 
-    @tool(title="Force-stop VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Force-stop VM", annotations=DESTRUCTIVE)
     def stop_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Force-stop a VM (like pulling the power). Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.stop.post()
-        return _status_response("stopping", upid)
+        return _accepted("stop_vm", node, upid, vmid=vmid)
 
-    @tool(title="Shut down VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Shut down VM", annotations=LIFECYCLE)
     def shutdown_vm(
         ctx: Context,
         node: NodeArg,
@@ -136,36 +137,32 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         ] = 60,
     ) -> str:
         """Gracefully shutdown a VM via ACPI. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.shutdown.post(timeout=timeout)
-        return _status_response("shutting_down", upid)
+        return _accepted("shutdown_vm", node, upid, vmid=vmid)
 
-    @tool(title="Reboot VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Reboot VM", annotations=LIFECYCLE)
     def reboot_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Reboot a VM via ACPI. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.reboot.post()
-        return _status_response("rebooting", upid)
+        return _accepted("reboot_vm", node, upid, vmid=vmid)
 
-    @tool(title="Suspend VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Suspend VM", annotations=LIFECYCLE)
     def suspend_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Suspend a VM (pause execution, keep memory). Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.suspend.post()
-        return _status_response("suspending", upid)
+        return _accepted("suspend_vm", node, upid, vmid=vmid)
 
-    @tool(title="Resume VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Resume VM", annotations=LIFECYCLE)
     def resume_vm(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:
         """Resume a suspended VM. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).status.resume.post()
-        return _status_response("resuming", upid)
+        return _accepted("resume_vm", node, upid, vmid=vmid)
 
-    @tool(title="Clone VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Clone VM", annotations=LIFECYCLE)
     def clone_vm(
         ctx: Context,
         node: NodeArg,
@@ -190,16 +187,15 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         ] = True,
     ) -> str:
         """Clone a VM into a new VM. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         # Proxmox API expects 0/1 for boolean params, not true/false.
         params: dict[str, Any] = {"newid": newid, "full": int(full)}
         if name:
             params["name"] = name
         upid = pve.nodes(node).qemu(vmid).clone.post(**params)
-        return _status_response("cloning", upid)
+        return _accepted("clone_vm", node, upid, vmid=vmid)
 
-    @tool(title="Migrate VM", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Migrate VM", annotations=LIFECYCLE)
     def migrate_vm(
         ctx: Context,
         node: NodeArg,
@@ -227,16 +223,15 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         ] = False,
     ) -> str:
         """Migrate a VM to another node. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         # Proxmox API expects 0/1 for boolean params, and hyphenates this one.
         params: dict[str, Any] = {"target": target, "online": int(online)}
         if with_local_disks:
             params["with-local-disks"] = 1
         upid = pve.nodes(node).qemu(vmid).migrate.post(**params)
-        return _status_response("migrating", upid)
+        return _accepted("migrate_vm", node, upid, vmid=vmid)
 
-    @tool(title="Create VM snapshot", annotations=LIFECYCLE)
+    @tool(tier="lifecycle", title="Create VM snapshot", annotations=LIFECYCLE)
     def create_vm_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -247,16 +242,15 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         ] = "",
     ) -> str:
         """Create a snapshot of a VM. Requires PROXMOX_RISK_LEVEL=lifecycle."""
-        _tier(ctx, "lifecycle")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot.post(
             snapname=snapname, description=description
         )
-        return _status_response("creating_snapshot", upid)
+        return _accepted("create_vm_snapshot", node, upid, vmid=vmid)
 
     # ── Destructive (PROXMOX_RISK_LEVEL=all) ──
 
-    @tool(title="Delete VM snapshot", annotations=DESTRUCTIVE)
+    @tool(tier="all", title="Delete VM snapshot", annotations=DESTRUCTIVE)
     def delete_vm_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -264,12 +258,11 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         snapname: Annotated[str, Field(description="Snapshot name to delete (irreversible).")],
     ) -> str:
         """Delete a VM snapshot. Irreversible. Requires PROXMOX_RISK_LEVEL=all."""
-        _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot(snapname).delete()
-        return _status_response("deleting_snapshot", upid)
+        return _accepted("delete_vm_snapshot", node, upid, vmid=vmid)
 
-    @tool(title="Roll back VM snapshot", annotations=DESTRUCTIVE)
+    @tool(tier="all", title="Roll back VM snapshot", annotations=DESTRUCTIVE)
     def rollback_vm_snapshot(
         ctx: Context,
         node: NodeArg,
@@ -287,7 +280,6 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
 
         Requires PROXMOX_RISK_LEVEL=all.
         """
-        _tier(ctx, "all")
         pve = _ctx(ctx).proxmox
         upid = pve.nodes(node).qemu(vmid).snapshot(snapname).rollback.post()
-        return _status_response("rolling_back", upid)
+        return _accepted("rollback_vm_snapshot", node, upid, vmid=vmid)

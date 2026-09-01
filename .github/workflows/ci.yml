@@ -90,3 +90,75 @@ jobs:
           assert init["serverInfo"]["version"], "version metadata missing from the image"
           assert {"list_nodes", "start_vm", "rollback_vm_snapshot"} <= {t["name"] for t in tools}
           PY
+
+      - name: Smoke-test the image over streamable-http
+        run: |
+          docker run -d --name mcp-http -p 8000:8000 \
+            -e PROXMOX_HOST=192.0.2.1 \
+            -e PROXMOX_TOKEN_NAME=t \
+            -e PROXMOX_TOKEN_VALUE=v \
+            -e PROXMOX_RISK_LEVEL=all \
+            -e PROXMOX_MCP_TRANSPORT=streamable-http \
+            -e PROXMOX_MCP_HOST=0.0.0.0 \
+            -e PROXMOX_MCP_ALLOWED_HOSTS=localhost:*,127.0.0.1:* \
+            proxmox-mcp:ci
+          for _ in $(seq 30); do
+            curl -fs http://127.0.0.1:8000/healthz && break || sleep 1
+          done
+          python3 - <<'PY'
+          import json, urllib.error, urllib.request
+
+          BASE = "http://127.0.0.1:8000"
+          ENVELOPE = {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {},
+          }
+
+          def post(headers, path="/mcp"):
+              body = json.dumps(
+                  {"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+                   "params": {"_meta": ENVELOPE}}
+              ).encode()
+              request = urllib.request.Request(BASE + path, data=body, headers={
+                  "Content-Type": "application/json",
+                  "Accept": "application/json, text/event-stream",
+                  "MCP-Protocol-Version": "2026-07-28",
+                  "Mcp-Method": "tools/list",
+                  **headers,
+              })
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      return response.status, json.load(response)
+              except urllib.error.HTTPError as exc:
+                  return exc.code, None
+
+          # Liveness must answer without a reachable Proxmox behind it; readiness
+          # must not, since 192.0.2.1 is the unroutable TEST-NET address.
+          with urllib.request.urlopen(BASE + "/healthz") as response:
+              assert json.load(response)["status"] == "ok"
+          try:
+              urllib.request.urlopen(BASE + "/readyz")
+              raise AssertionError("/readyz answered 200 with no Proxmox reachable")
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 503, exc.code
+
+          status, payload = post({})
+          result = payload["result"]
+          print(f"tools listed over http: {len(result['tools'])}")
+          assert status == 200
+          assert {"list_nodes", "start_vm", "get_server_info"} <= {
+              t["name"] for t in result["tools"]
+          }
+          # cache_hints, so a client is not forced to re-fetch a list that cannot change
+          assert result["ttlMs"] > 0, result.get("ttlMs")
+          assert result["cacheScope"] == "public"
+
+          # DNS-rebinding protection: the SDK ships it off, so this is the test that
+          # catches it silently turning back off.
+          assert post({"Origin": "http://evil.example"})[0] == 403
+          assert post({"Host": "evil.example"})[0] == 421
+          PY
+
+      - name: Container logs
+        if: always()
+        run: docker logs mcp-http || true

@@ -3,22 +3,25 @@ from typing import Annotated, Any
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import Field
 
-from proxmox_mcp.config import RiskLevel
 from proxmox_mcp.tools._common import (
+    NODE_FIELDS,
     READ_ONLY,
+    Policy,
     RrdCf,
     Timeframe,
+    VerboseArg,
+    _compact,
     _ctx,
     _json,
     make_gate,
 )
 
 
-def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
-    tool = make_gate(mcp, risk_level)
+def register(mcp: MCPServer, policy: Policy) -> None:
+    tool = make_gate(mcp, policy)
 
-    @tool(title="List nodes", annotations=READ_ONLY)
-    def list_nodes(ctx: Context) -> str:
+    @tool(tier="read", title="List nodes", annotations=READ_ONLY)
+    def list_nodes(ctx: Context, verbose: VerboseArg = False) -> str:
         """List all nodes in the Proxmox cluster with status, CPU, memory, and uptime."""
         pve = _ctx(ctx).proxmox
         nodes = pve.nodes.get()
@@ -31,9 +34,9 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
             if "cpu" in node:
                 enriched["cpu_usage_pct"] = round(node["cpu"] * 100, 1)
             result.append(enriched)
-        return _json(result)
+        return _json(result if verbose else _compact(result, NODE_FIELDS))
 
-    @tool(title="Node status", annotations=READ_ONLY)
+    @tool(tier="read", title="Node status", annotations=READ_ONLY)
     def get_node_status(
         ctx: Context,
         node: Annotated[str, Field(description="Node name (e.g. 'pve', 'node1').")],
@@ -43,7 +46,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         status = pve.nodes(node).status.get()
         return _json(status)
 
-    @tool(title="Node networks", annotations=READ_ONLY)
+    @tool(tier="read", title="Node networks", annotations=READ_ONLY)
     def get_node_networks(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -53,7 +56,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         networks = pve.nodes(node).network.get()
         return _json(networks)
 
-    @tool(title="Node disks", annotations=READ_ONLY)
+    @tool(tier="read", title="Node disks", annotations=READ_ONLY)
     def get_node_disks(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -63,7 +66,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         disks = pve.nodes(node).disks.list.get()
         return _json(disks)
 
-    @tool(title="Node services", annotations=READ_ONLY)
+    @tool(tier="read", title="Node services", annotations=READ_ONLY)
     def get_node_services(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -77,7 +80,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         services = pve.nodes(node).services.get()
         return _json(services)
 
-    @tool(title="Node updates", annotations=READ_ONLY)
+    @tool(tier="read", title="Node updates", annotations=READ_ONLY)
     def get_node_updates(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -91,7 +94,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         updates = pve.nodes(node).apt.update.get()
         return _json(updates)
 
-    @tool(title="Node metrics history", annotations=READ_ONLY)
+    @tool(tier="read", title="Node metrics history", annotations=READ_ONLY)
     def get_node_rrd_data(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -118,7 +121,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         data = pve.nodes(node).rrddata.get(timeframe=timeframe, cf=cf)
         return _json(data)
 
-    @tool(title="Node tasks", annotations=READ_ONLY)
+    @tool(tier="read", title="Node tasks", annotations=READ_ONLY)
     def get_node_tasks(
         ctx: Context,
         node: Annotated[str, Field(description="Node name.")],
@@ -139,7 +142,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         tasks = pve.nodes(node).tasks.get(**params)
         return _json(tasks)
 
-    @tool(title="Task status", annotations=READ_ONLY)
+    @tool(tier="read", title="Task status", annotations=READ_ONLY)
     def get_task_status(
         ctx: Context,
         node: Annotated[str, Field(description="Node name where the task runs.")],
@@ -153,7 +156,7 @@ def register(mcp: MCPServer, risk_level: RiskLevel) -> None:
         status = pve.nodes(node).tasks(upid).status.get()
         return _json(status)
 
-    @tool(title="Task log", annotations=READ_ONLY)
+    @tool(tier="read", title="Task log", annotations=READ_ONLY)
     def get_task_log(
         ctx: Context,
         node: Annotated[str, Field(description="Node name where the task runs.")],

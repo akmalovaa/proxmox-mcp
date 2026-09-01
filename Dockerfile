@@ -27,7 +27,7 @@ FROM python:3.14-slim
 # server.json — the value must match its "name" field exactly.
 LABEL io.modelcontextprotocol.server.name="io.github.akmalovaa/proxmox-mcp"
 
-# stdio transport needs no ports and no writable state, so drop root.
+# No writable state either way, so drop root.
 RUN useradd --create-home --uid 10001 mcp
 
 WORKDIR /app
@@ -36,4 +36,11 @@ COPY --from=builder --chown=mcp:mcp /app/.venv /app/.venv
 USER mcp
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Only bound in HTTP mode (PROXMOX_MCP_TRANSPORT=streamable-http); the stdio
+# default listens on nothing. A container serving HTTP also needs
+# PROXMOX_MCP_HOST=0.0.0.0 and PROXMOX_MCP_ALLOWED_HOSTS.
+EXPOSE 8000
+
+# Entry point stays the console script: transport is chosen by environment, so a
+# deployment never has to override the command and reach into the Python package.
 CMD ["proxmox-ve-mcp"]

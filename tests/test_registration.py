@@ -8,7 +8,7 @@ from proxmox_mcp.tools._common import (
     DESTRUCTIVE,
     LIFECYCLE,
     READ_ONLY,
-    _required_tier,
+    _check_annotations,
 )
 from tests.conftest import build_server
 
@@ -28,6 +28,8 @@ READ_TOOLS = {
     # cluster (7)
     "get_cluster_status", "get_cluster_resources", "get_cluster_backups",
     "get_ha_status", "list_pools", "get_cluster_log", "get_next_vmid",
+    # server (1)
+    "get_server_info",
 }
 
 LIFECYCLE_TOOLS = {
@@ -46,8 +48,13 @@ DESTRUCTIVE_TOOLS = {
     "delete_container_snapshot", "rollback_container_snapshot",
 }
 
+# Annotated destructive, but admitted at the lifecycle tier: a force-stop loses
+# whatever the guest had in flight, which the client must be told, while the
+# operator still expects it under `lifecycle`.
+DESTRUCTIVE_ANNOTATION_TOOLS = DESTRUCTIVE_TOOLS | {"stop_vm", "stop_container"}
 
-def _registered_tool_names(risk_level: RiskLevel) -> set[str]:
+
+def _tool_names(risk_level: RiskLevel) -> set[str]:
     tools = asyncio.run(build_server(risk_level).list_tools())
     return {t.name for t in tools}
 
@@ -61,19 +68,28 @@ def _registered_tool_names(risk_level: RiskLevel) -> set[str]:
     ],
 )
 def test_tools_registered_per_tier(risk_level: RiskLevel, expected: set[str]) -> None:
-    assert _registered_tool_names(risk_level) == expected
+    assert _tool_names(risk_level) == expected
 
 
 def test_tool_counts_per_tier() -> None:
-    assert len(_registered_tool_names("read")) == 31
-    assert len(_registered_tool_names("lifecycle")) == 45
-    assert len(_registered_tool_names("all")) == 49
+    assert len(_tool_names("read")) == 32
+    assert len(_tool_names("lifecycle")) == 46
+    assert len(_tool_names("all")) == 50
 
 
 def test_read_level_hides_destructive_tools() -> None:
-    names = _registered_tool_names("read")
+    names = _tool_names("read")
     assert not (names & DESTRUCTIVE_TOOLS)
     assert not (names & LIFECYCLE_TOOLS)
+
+
+def test_tool_list_order_is_deterministic() -> None:
+    """Clients cache the tool list and LLM prompt caches key on it, so the order
+    must not depend on anything that varies between processes."""
+    first = [t.name for t in asyncio.run(build_server("all").list_tools())]
+    second = [t.name for t in asyncio.run(build_server("all").list_tools())]
+    assert first == second
+    assert len(first) == len(set(first))
 
 
 def test_every_tool_is_described_and_annotated() -> None:
@@ -88,26 +104,60 @@ def test_every_tool_is_described_and_annotated() -> None:
             assert schema.get("description"), f"{tool.name}.{param} has no description"
 
 
+def test_annotations_are_independent_of_the_tier() -> None:
+    """The two matrices are checked separately on purpose: a tool's admission tier
+    is the operator's policy, its annotations are what the client is told."""
+    tools = {t.name: t for t in asyncio.run(build_server("all").list_tools())}
+
+    for name in READ_TOOLS:
+        assert tools[name].annotations.read_only_hint is True, name
+
+    for name in LIFECYCLE_TOOLS | DESTRUCTIVE_TOOLS:
+        assert tools[name].annotations.read_only_hint is False, name
+
+    for name, tool in tools.items():
+        expected = name in DESTRUCTIVE_ANNOTATION_TOOLS
+        assert bool(tool.annotations.destructive_hint) is expected, name
+
+
 @pytest.mark.parametrize(
-    "annotations,expected",
+    "tier,annotations",
     [
-        (READ_ONLY, "read"),
-        (LIFECYCLE, "lifecycle"),
-        (DESTRUCTIVE, "all"),
-        # Inferred from the fields, so a hand-built annotation lands correctly
-        # instead of falling through to `read` the way identity matching did.
-        (ToolAnnotations(read_only_hint=True), "read"),
-        (ToolAnnotations(destructive_hint=True), "all"),
-        (ToolAnnotations(read_only_hint=False, destructive_hint=False), "lifecycle"),
+        ("read", READ_ONLY),
+        ("lifecycle", LIFECYCLE),
+        ("lifecycle", DESTRUCTIVE),  # force-stop: destructive, but lifecycle-tier
+        ("all", DESTRUCTIVE),
     ],
 )
-def test_required_tier_reads_annotation_fields(
-    annotations: ToolAnnotations, expected: str
-) -> None:
-    assert _required_tier(annotations) == expected
+def test_valid_tier_annotation_pairs(tier: str, annotations: ToolAnnotations) -> None:
+    _check_annotations(tier, annotations)  # type: ignore[arg-type]
 
 
-def test_unannotated_tool_is_rejected() -> None:
-    """Silently defaulting to `read` would expose an elevated tool at every tier."""
-    with pytest.raises(ValueError, match="must pass annotations"):
-        _required_tier(None)
+@pytest.mark.parametrize(
+    "tier,annotations,match",
+    [
+        (None, None, "must pass annotations"),
+        ("lifecycle", READ_ONLY, "cannot require tier"),
+        ("all", ToolAnnotations(), "must set read_only_hint=False"),
+    ],
+)
+def test_invalid_tier_annotation_pairs(tier: str, annotations: object, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        _check_annotations(tier or "read", annotations)  # type: ignore[arg-type]
+
+
+def test_allowlist_narrows_within_the_tier() -> None:
+    allow = frozenset({"list_nodes", "list_vms", "start_vm"})
+    assert _tool_names_with_allow("read", allow) == {"list_nodes", "list_vms"}
+    assert _tool_names_with_allow("all", allow) == set(allow)
+
+
+def test_allowlist_rejects_unknown_names() -> None:
+    """A typo would otherwise silently amputate the tool list."""
+    with pytest.raises(ValueError, match="list_noeds"):
+        _tool_names_with_allow("all", frozenset({"list_nodes", "list_noeds"}))
+
+
+def _tool_names_with_allow(risk_level: RiskLevel, allow: frozenset[str]) -> set[str]:
+    tools = asyncio.run(build_server(risk_level, allow=allow).list_tools())
+    return {t.name for t in tools}

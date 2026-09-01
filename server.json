@@ -3,7 +3,7 @@
   "name": "io.github.akmalovaa/proxmox-mcp",
   "title": "Proxmox VE",
   "description": "Manage Proxmox VE nodes, VMs, containers, storage and snapshots. Read-only by default.",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "websiteUrl": "https://github.com/akmalovaa/proxmox-mcp",
   "repository": {
     "url": "https://github.com/akmalovaa/proxmox-mcp",
@@ -13,7 +13,9 @@
     {
       "src": "https://github.com/akmalovaa/proxmox-mcp/raw/main/docs/logo_512.png",
       "mimeType": "image/png",
-      "sizes": ["512x512"]
+      "sizes": [
+        "512x512"
+      ]
     }
   ],
   "packages": [
@@ -21,36 +23,15 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "proxmox-ve-mcp",
-      "version": "2.2.0",
-      "transport": { "type": "stdio" },
+      "version": "2.3.0",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "PROXMOX_HOST",
           "description": "Proxmox host IP or hostname.",
           "isRequired": true,
-          "format": "string"
-        },
-        {
-          "name": "PROXMOX_USER",
-          "description": "API user, including the realm.",
-          "default": "root@pam",
-          "format": "string"
-        },
-        {
-          "name": "PROXMOX_TOKEN_NAME",
-          "description": "API token name. Use this plus PROXMOX_TOKEN_VALUE, or PROXMOX_PASSWORD.",
-          "format": "string"
-        },
-        {
-          "name": "PROXMOX_TOKEN_VALUE",
-          "description": "API token secret.",
-          "isSecret": true,
-          "format": "string"
-        },
-        {
-          "name": "PROXMOX_PASSWORD",
-          "description": "Password, used only when no API token is set.",
-          "isSecret": true,
           "format": "string"
         },
         {
@@ -66,24 +47,10 @@
           "format": "boolean"
         },
         {
-          "name": "PROXMOX_RISK_LEVEL",
-          "description": "Which tools exist: read-only, plus lifecycle, or everything.",
-          "default": "read",
-          "choices": ["read", "lifecycle", "all"],
-          "format": "string"
-        }
-      ]
-    },
-    {
-      "registryType": "oci",
-      "identifier": "ghcr.io/akmalovaa/proxmox-mcp:2.2.0",
-      "transport": { "type": "stdio" },
-      "environmentVariables": [
-        {
-          "name": "PROXMOX_HOST",
-          "description": "Proxmox host IP or hostname.",
-          "isRequired": true,
-          "format": "string"
+          "name": "PROXMOX_TIMEOUT",
+          "description": "Seconds to wait for each Proxmox API request.",
+          "default": "15",
+          "format": "number"
         },
         {
           "name": "PROXMOX_USER",
@@ -112,7 +79,194 @@
           "name": "PROXMOX_RISK_LEVEL",
           "description": "Which tools exist: read-only, plus lifecycle, or everything.",
           "default": "read",
-          "choices": ["read", "lifecycle", "all"],
+          "choices": [
+            "read",
+            "lifecycle",
+            "all"
+          ],
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOOLS_ALLOW",
+          "description": "Comma-separated tool names to register, intersected with the risk level. Unset = all of them.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_REDACT_SECRETS",
+          "description": "Mask cipassword and sshkeys in every response.",
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_MCP_TRANSPORT",
+          "description": "stdio (default) or streamable-http.",
+          "default": "stdio",
+          "choices": [
+            "stdio",
+            "streamable-http"
+          ],
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_HOST",
+          "description": "HTTP bind address. Anything but loopback also needs PROXMOX_MCP_ALLOWED_HOSTS.",
+          "default": "127.0.0.1",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_PORT",
+          "description": "HTTP port.",
+          "default": "8000",
+          "format": "number"
+        },
+        {
+          "name": "PROXMOX_MCP_PATH",
+          "description": "Streamable HTTP endpoint path.",
+          "default": "/mcp",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_JSON_RESPONSE",
+          "description": "Answer with JSON instead of an SSE stream.",
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_MCP_ALLOWED_HOSTS",
+          "description": "Comma-separated Host headers to accept over HTTP; '*' disables the check.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_ALLOWED_ORIGINS",
+          "description": "Comma-separated browser origins allowed to call the endpoint. Empty = same-origin only.",
+          "format": "string"
+        },
+        {
+          "name": "SENTRY_DSN",
+          "description": "Optional: report tool traces and errors to Sentry. Unset disables it.",
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/akmalovaa/proxmox-mcp:2.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "PROXMOX_HOST",
+          "description": "Proxmox host IP or hostname.",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_PORT",
+          "description": "Proxmox API port.",
+          "default": "8006",
+          "format": "number"
+        },
+        {
+          "name": "PROXMOX_VERIFY_SSL",
+          "description": "Verify the TLS certificate. Proxmox self-signs by default.",
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_TIMEOUT",
+          "description": "Seconds to wait for each Proxmox API request.",
+          "default": "15",
+          "format": "number"
+        },
+        {
+          "name": "PROXMOX_USER",
+          "description": "API user, including the realm.",
+          "default": "root@pam",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_NAME",
+          "description": "API token name. Use this plus PROXMOX_TOKEN_VALUE, or PROXMOX_PASSWORD.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_VALUE",
+          "description": "API token secret.",
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_PASSWORD",
+          "description": "Password, used only when no API token is set.",
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_RISK_LEVEL",
+          "description": "Which tools exist: read-only, plus lifecycle, or everything.",
+          "default": "read",
+          "choices": [
+            "read",
+            "lifecycle",
+            "all"
+          ],
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOOLS_ALLOW",
+          "description": "Comma-separated tool names to register, intersected with the risk level. Unset = all of them.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_REDACT_SECRETS",
+          "description": "Mask cipassword and sshkeys in every response.",
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_MCP_TRANSPORT",
+          "description": "stdio (default) or streamable-http.",
+          "default": "stdio",
+          "choices": [
+            "stdio",
+            "streamable-http"
+          ],
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_HOST",
+          "description": "HTTP bind address. Anything but loopback also needs PROXMOX_MCP_ALLOWED_HOSTS.",
+          "default": "127.0.0.1",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_PORT",
+          "description": "HTTP port.",
+          "default": "8000",
+          "format": "number"
+        },
+        {
+          "name": "PROXMOX_MCP_PATH",
+          "description": "Streamable HTTP endpoint path.",
+          "default": "/mcp",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_JSON_RESPONSE",
+          "description": "Answer with JSON instead of an SSE stream.",
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_MCP_ALLOWED_HOSTS",
+          "description": "Comma-separated Host headers to accept over HTTP; '*' disables the check.",
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_MCP_ALLOWED_ORIGINS",
+          "description": "Comma-separated browser origins allowed to call the endpoint. Empty = same-origin only.",
           "format": "string"
         },
         {

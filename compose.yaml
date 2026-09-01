@@ -6,3 +6,20 @@ services:
     env_file: .env
     stdin_open: true
     restart: "no"
+
+  # HTTP mode: no `command:` override, just environment. Uncomment to use.
+  # proxmox-mcp-http:
+  #   build: .
+  #   image: proxmox-mcp
+  #   container_name: proxmox-mcp-http
+  #   env_file: .env
+  #   environment:
+  #     PROXMOX_MCP_TRANSPORT: streamable-http
+  #     PROXMOX_MCP_HOST: 0.0.0.0
+  #     PROXMOX_MCP_ALLOWED_HOSTS: localhost:*,127.0.0.1:*
+  #   ports:
+  #     - "8000:8000"
+  #   healthcheck:
+  #     test: ["CMD", "python", "-c",
+  #            "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+  #     interval: 30s

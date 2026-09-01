@@ -95,6 +95,8 @@ CASES: list[tuple[str, dict[str, Any], str, str]] = [
     ("list_pools", {}, "get", "pools"),
     ("get_cluster_log", {}, "get", "cluster/log"),
     ("get_next_vmid", {}, "get", "cluster/nextid"),
+    # ── server ──
+    ("get_server_info", {}, "get", "version"),
 ]
 
 
