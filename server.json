@@ -76,9 +76,7 @@
     },
     {
       "registryType": "oci",
-      "registryBaseUrl": "https://ghcr.io",
       "identifier": "ghcr.io/akmalovaa/proxmox-mcp:2.1.1",
-      "version": "2.1.1",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
