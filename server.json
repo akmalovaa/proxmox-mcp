@@ -3,7 +3,7 @@
   "name": "io.github.akmalovaa/proxmox-mcp",
   "title": "Proxmox VE",
   "description": "Manage Proxmox VE nodes, VMs, containers, storage and snapshots. Read-only by default.",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "websiteUrl": "https://github.com/akmalovaa/proxmox-mcp",
   "repository": {
     "url": "https://github.com/akmalovaa/proxmox-mcp",
@@ -21,7 +21,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "proxmox-ve-mcp",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
@@ -76,7 +76,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/akmalovaa/proxmox-mcp:2.1.1",
+      "identifier": "ghcr.io/akmalovaa/proxmox-mcp:2.2.0",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
