@@ -37,7 +37,7 @@ Changelog = "https://github.com/akmalovaa/proxmox-mcp/releases"
 proxmox-ve-mcp = "proxmox_mcp.server:main"
 
 [build-system]
-requires = ["uv_build>=0.11.3,<0.12.0"]
+requires = ["uv_build>=0.11.3,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
