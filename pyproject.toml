@@ -40,6 +40,10 @@ Changelog = "https://github.com/akmalovaa/proxmox-mcp/releases"
 
 [project.scripts]
 proxmox-ve-mcp = "proxmox_mcp.server:main"
+# Alias under the repository name. The distribution had to be renamed for PyPI,
+# but tooling that derives the command from the repo (Glama's build spec does)
+# still spawns `proxmox-mcp` and fails with "No such file or directory".
+proxmox-mcp = "proxmox_mcp.server:main"
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]
