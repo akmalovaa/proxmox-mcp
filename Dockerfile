@@ -1,5 +1,5 @@
 # Build the virtualenv in a throwaway stage so uv never ships in the final image.
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 # Pinned: `latest` would make every rebuild of an old tag a different image.
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
@@ -21,7 +21,7 @@ COPY src/ src/
 RUN uv sync --frozen --no-dev --extra sentry --no-editable
 
 
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # How the MCP Registry verifies this image belongs to the server declared in
 # server.json — the value must match its "name" field exactly.
