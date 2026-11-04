@@ -10,12 +10,16 @@ from proxmox_mcp.tools._common import (
     READ_ONLY,
     Policy,
     RrdCf,
+    RrdFieldsArg,
+    RrdMaxPointsArg,
+    RrdSummaryArg,
     Timeframe,
     VerboseArg,
     _accepted,
     _compact,
     _ctx,
     _json,
+    _rrd,
     make_gate,
 )
 
@@ -94,11 +98,14 @@ def register(mcp: MCPServer, policy: Policy) -> None:
                 )
             ),
         ] = "AVERAGE",
+        fields: RrdFieldsArg = None,
+        max_points: RrdMaxPointsArg = None,
+        summary: RrdSummaryArg = False,
     ) -> str:
         """Get historical CPU, memory, disk and network metrics for a container (RRD series)."""
         pve = _ctx(ctx).proxmox
         data = pve.nodes(node).lxc(vmid).rrddata.get(timeframe=timeframe, cf=cf)
-        return _json(data)
+        return _json(_rrd(data, cf, fields, max_points, summary))
 
     @tool(tier="read", title="List container snapshots", annotations=READ_ONLY)
     def list_container_snapshots(ctx: Context, node: NodeArg, vmid: VmidArg) -> str:

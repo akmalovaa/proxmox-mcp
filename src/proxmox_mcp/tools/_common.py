@@ -304,6 +304,84 @@ def _compact(rows: Iterable[Mapping[str, Any]], keys: Sequence[str]) -> list[dic
     return [{k: v for k, v in row.items() if k in wanted} for row in rows]
 
 
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _rrd_metrics(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Every metric name in the series, in first-seen order, without ``time``."""
+    return [k for k in dict.fromkeys(k for row in rows for k in row) if k != "time"]
+
+
+def _rrd_merge(bucket: Sequence[Mapping[str, Any]], cf: RrdCf) -> dict[str, Any]:
+    """Condense neighbouring samples into one, the same way Proxmox condensed them."""
+    merged: dict[str, Any] = {}
+    if "time" in bucket[0]:
+        merged["time"] = bucket[0]["time"]
+    for key in _rrd_metrics(bucket):
+        values = [row[key] for row in bucket if _is_number(row.get(key))]
+        if values:
+            merged[key] = max(values) if cf == "MAX" else sum(values) / len(values)
+    return merged
+
+
+def _rrd_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    times = [row["time"] for row in rows if "time" in row]
+    stats: dict[str, Any] = {}
+    for key in _rrd_metrics(rows):
+        values = [row[key] for row in rows if _is_number(row.get(key))]
+        if values:
+            stats[key] = {
+                "min": min(values),
+                "max": max(values),
+                "avg": sum(values) / len(values),
+                "last": values[-1],
+            }
+    return {
+        "samples": len(rows),
+        "from": times[0] if times else None,
+        "to": times[-1] if times else None,
+        "fields": stats,
+    }
+
+
+def _rrd(
+    samples: Iterable[Mapping[str, Any]],
+    cf: RrdCf,
+    fields: Sequence[str] | None = None,
+    max_points: int | None = None,
+    summary: bool = False,
+) -> Any:
+    """Shape an RRD series the way the caller asked for it.
+
+    The ``rrddata`` endpoints take only ``timeframe`` and ``cf``, and a series is
+    every metric at every step, 20 or more fields per sample. Narrowing therefore
+    happens here. ``fields`` keeps the named metrics
+    (``time`` always stays), ``summary`` replaces the series with min, max, avg and
+    last per metric, and ``max_points`` merges neighbouring samples using ``cf``,
+    so a thinned MAX series still shows the spikes.
+    """
+    rows = [dict(row) for row in samples]
+    if fields:
+        available = _rrd_metrics(rows)
+        missing = [f for f in fields if f not in available]
+        if rows and missing:
+            raise ValueError(
+                f"RRD field(s) {missing} are not in this series; "
+                f"available: {', '.join(available)}"
+            )
+        rows = _compact(rows, ("time", *fields))
+    if summary:
+        return _rrd_summary(rows)
+    if max_points is not None and len(rows) > max_points:
+        n = len(rows)
+        rows = [
+            _rrd_merge(rows[i * n // max_points : (i + 1) * n // max_points], cf)
+            for i in range(max_points)
+        ]
+    return rows
+
+
 def _accepted(operation: str, node: str, upid: str, **ids: Any) -> str:
     """Envelope for a write: Proxmox has queued a task, nothing has happened yet.
 
@@ -347,6 +425,40 @@ VerboseArg = Annotated[
             "Return every field Proxmox sends instead of the compact subset "
             "(identity, status, uptime, cpu and memory). The full rows are several "
             "times larger and are mostly per-second IO counters."
+        )
+    ),
+]
+
+# Optional narrowing for the */rrddata tools. Proxmox itself only takes a window and
+# a consolidation function, so these are applied to the response, not sent upstream.
+RrdFieldsArg = Annotated[
+    list[str] | None,
+    Field(
+        description=(
+            "Metrics to keep, for example ['cpu', 'netin', 'netout']; 'time' is always "
+            "kept. Nodes report memused/memtotal, guests mem/maxmem. Omit for every "
+            "metric, including the PSI pressure gauges."
+        )
+    ),
+]
+RrdMaxPointsArg = Annotated[
+    int | None,
+    Field(
+        description=(
+            "Return at most this many samples. Neighbouring samples are merged with "
+            "the chosen cf (averaged for AVERAGE, maximum for MAX), so spikes survive "
+            "thinning under MAX."
+        ),
+        ge=1,
+    ),
+]
+RrdSummaryArg = Annotated[
+    bool,
+    Field(
+        description=(
+            "Return min, max, avg and last of each metric over the window instead of "
+            "the samples. Enough for 'how high did it get' or 'what is the trend' "
+            "questions. max_points is ignored when this is true."
         )
     ),
 ]

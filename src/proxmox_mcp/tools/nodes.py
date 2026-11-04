@@ -8,11 +8,15 @@ from proxmox_mcp.tools._common import (
     READ_ONLY,
     Policy,
     RrdCf,
+    RrdFieldsArg,
+    RrdMaxPointsArg,
+    RrdSummaryArg,
     Timeframe,
     VerboseArg,
     _compact,
     _ctx,
     _json,
+    _rrd,
     make_gate,
 )
 
@@ -111,6 +115,9 @@ def register(mcp: MCPServer, policy: Policy) -> None:
                 )
             ),
         ] = "AVERAGE",
+        fields: RrdFieldsArg = None,
+        max_points: RrdMaxPointsArg = None,
+        summary: RrdSummaryArg = False,
     ) -> str:
         """Get historical CPU, memory, disk and network metrics for a node (RRD series).
 
@@ -119,7 +126,7 @@ def register(mcp: MCPServer, policy: Policy) -> None:
         """
         pve = _ctx(ctx).proxmox
         data = pve.nodes(node).rrddata.get(timeframe=timeframe, cf=cf)
-        return _json(data)
+        return _json(_rrd(data, cf, fields, max_points, summary))
 
     @tool(tier="read", title="Node tasks", annotations=READ_ONLY)
     def get_node_tasks(
