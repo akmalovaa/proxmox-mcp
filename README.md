@@ -206,6 +206,21 @@ dropped is per-second IO counters and PSI pressure gauges — real data, but not
 triage decision turns on, and several times the volume of what is kept. Pass
 `verbose=true` for the untouched rows.
 
+The RRD tools (`get_node_rrd_data`, `get_vm_rrd_data`, `get_container_rrd_data`) return
+the series untouched by default: every metric, PSI gauges included, at every step. The
+Proxmox endpoint takes only `timeframe` and `cf`, so three optional arguments narrow the
+response on the server side:
+
+- `fields` keeps the named metrics, for example `["cpu","netin","netout"]`; `time` always stays
+- `max_points` merges neighbouring samples into at most that many, averaging under
+  `cf=AVERAGE` and keeping the maximum under `cf=MAX`
+- `summary=true` returns `min`, `max`, `avg` and `last` per metric instead of the samples
+
+```json
+{"samples":70,"from":1761980400,"to":1762062000,
+ "fields":{"cpu":{"min":0.01,"max":0.93,"avg":0.12,"last":0.04}}}
+```
+
 Write tools answer with the task Proxmox accepted, not with a finished result:
 
 ```json
